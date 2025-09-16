@@ -211,7 +211,7 @@ export const useOrders = () => {
     };
 
     loadOrders();
-  }, []);
+  }, [currentShop?.id]);
 
   return {
     orders,

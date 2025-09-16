@@ -101,7 +101,7 @@ export const useTables = () => {
     };
 
     loadTables();
-  }, []);
+  }, [currentShop?.id]);
 
   return {
     tables,

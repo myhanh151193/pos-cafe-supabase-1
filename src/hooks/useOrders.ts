@@ -87,6 +87,13 @@ export const useOrders = () => {
       const totalAmount = items.reduce((sum, item) => sum + item.total_price, 0);
 
       // Create order
+      // attach shop_id if available
+      let shopId: string | null = null;
+      try {
+        const { currentShop } = useShop();
+        if (currentShop) shopId = currentShop.id;
+      } catch (e) {}
+
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -95,7 +102,8 @@ export const useOrders = () => {
           total_amount: totalAmount,
           customer_name: customerName,
           notes: notes,
-          status: 'pending'
+          status: 'pending',
+          shop_id: shopId,
         })
         .select()
         .single();
@@ -119,7 +127,7 @@ export const useOrders = () => {
 
       toast({
         title: "Đã tạo đơn hàng",
-        description: `Đơn hàng ${orderNumber} đã được tạo th��nh công`,
+        description: `Đơn hàng ${orderNumber} đã được tạo thành công`,
       });
 
       return orderData;

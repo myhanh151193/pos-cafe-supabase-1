@@ -38,6 +38,13 @@ export const useOrders = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { currentShop } = (() => {
+    try {
+      return useShop();
+    } catch (e) {
+      return { currentShop: null } as any;
+    }
+  })();
 
   const fetchOrders = async () => {
     try {

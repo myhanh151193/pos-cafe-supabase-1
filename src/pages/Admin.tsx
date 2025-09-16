@@ -13,7 +13,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { 
@@ -37,6 +37,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useProducts } from "@/hooks/useProducts";
 import { useTables } from "@/hooks/useTables";
 import { useOrders } from "@/hooks/useOrders";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 
 // Using the types from hooks
 import type { Product } from "@/hooks/useProducts";
@@ -44,11 +47,23 @@ import type { Table as TableType } from "@/hooks/useTables";
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState("overview");
-  const { products, categories, loading: productsLoading } = useProducts();
+  const { products, categories, loading: productsLoading, addProduct, updateProduct, deleteProduct, refetch } = useProducts({ includeUnavailable: true });
   const { tables, loading: tablesLoading } = useTables();
   const { orders, loading: ordersLoading } = useOrders();
   
   const { toast } = useToast();
+
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    price: 0,
+    category_id: "",
+    description: "",
+    image_url: "",
+    is_available: true,
+  });
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -281,6 +296,16 @@ const Admin = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Danh sách sản phẩm</h2>
+        <Button
+          variant="pos"
+          onClick={() => {
+            setEditingProduct(null);
+            setForm({ name: "", price: 0, category_id: categories[0]?.id || "", description: "", image_url: "", is_available: true });
+            setIsProductDialogOpen(true);
+          }}
+        >
+          <Plus className="w-4 h-4 mr-2" /> Thêm sản phẩm
+        </Button>
       </div>
 
         <Card>
@@ -293,6 +318,7 @@ const Admin = () => {
                   <TableHead>Giá bán</TableHead>
                   <TableHead>Mô tả</TableHead>
                   <TableHead>Trạng thái</TableHead>
+                  <TableHead>Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -306,6 +332,33 @@ const Admin = () => {
                       <Badge variant={product.is_available ? "default" : "outline"}>
                         {product.is_available ? "Có sẵn" : "Hết hàng"}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingProduct(product);
+                          setForm({
+                            name: product.name,
+                            price: product.price,
+                            category_id: product.category_id || "",
+                            description: product.description || "",
+                            image_url: product.image_url || "",
+                            is_available: product.is_available,
+                          });
+                          setIsProductDialogOpen(true);
+                        }}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setProductToDelete(product)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -463,6 +516,106 @@ const Admin = () => {
           </main>
         </div>
       </div>
+      <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingProduct ? "Sửa sản phẩm" : "Thêm sản phẩm"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Tên sản phẩm</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Giá bán (VND)</Label>
+                <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
+              </div>
+            </div>
+
+            <div>
+              <Label>Danh mục</Label>
+              <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn danh mục" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Ảnh (URL)</Label>
+              <Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} />
+            </div>
+
+            <div>
+              <Label>Mô tả</Label>
+              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox id="is_available" checked={form.is_available} onCheckedChange={(v) => setForm({ ...form, is_available: Boolean(v) })} />
+              <Label htmlFor="is_available">Có sẵn</Label>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsProductDialogOpen(false)}>Hủy</Button>
+            <Button
+              onClick={async () => {
+                try {
+                  if (editingProduct) {
+                    await updateProduct(editingProduct.id, form);
+                    toast({ title: "Đã cập nhật sản phẩm" });
+                  } else {
+                    await addProduct(form);
+                    toast({ title: "Đã thêm sản phẩm" });
+                  }
+                  setIsProductDialogOpen(false);
+                  setEditingProduct(null);
+                } catch (e) {
+                  toast({ title: "Lỗi", description: "Không thể lưu sản phẩm", variant: "destructive" });
+                }
+              }}
+            >
+              Lưu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!productToDelete} onOpenChange={(open) => { if (!open) setProductToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa sản phẩm?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (productToDelete) {
+                  try {
+                    await deleteProduct(productToDelete.id);
+                    toast({ title: "Đã xóa sản phẩm" });
+                  } catch (e) {
+                    toast({ title: "Lỗi", description: "Không thể xóa sản phẩm", variant: "destructive" });
+                  } finally {
+                    setProductToDelete(null);
+                  }
+                }
+              }}
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </SidebarProvider>
   );
 };

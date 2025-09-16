@@ -37,7 +37,9 @@ export const useTables = () => {
       const { data, error } = await query;
 
       if (error) throw error;
-      setTables(data as Table[] || []);
+      const rows = data as Table[] || [];
+      console.debug('[useTables] fetched', rows.length, 'tables for shop', currentShop?.id, rows.map(r=>r.id));
+      setTables(rows);
     } catch (err) {
       console.error('Error fetching tables:', err);
       setError('Không thể tải danh sách bàn');

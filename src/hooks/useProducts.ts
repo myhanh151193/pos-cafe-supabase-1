@@ -68,14 +68,8 @@ export const useProducts = (options?: { includeUnavailable?: boolean }) => {
         query = query.eq('is_available', true);
       }
 
-      // If shop context present, filter by shop_id
-      try {
-        const { currentShop } = useShop();
-        if (currentShop) {
-          query = query.eq('shop_id', currentShop.id);
-        }
-      } catch (e) {
-        // useShop might not be available in non-React contexts; ignore
+      if (currentShop) {
+        query = query.eq('shop_id', currentShop.id);
       }
 
       const { data, error } = await query;

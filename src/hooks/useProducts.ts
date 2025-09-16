@@ -59,6 +59,16 @@ export const useProducts = (options?: { includeUnavailable?: boolean }) => {
         query = query.eq('is_available', true);
       }
 
+      // If shop context present, filter by shop_id
+      try {
+        const { currentShop } = useShop();
+        if (currentShop) {
+          query = query.eq('shop_id', currentShop.id);
+        }
+      } catch (e) {
+        // useShop might not be available in non-React contexts; ignore
+      }
+
       const { data, error } = await query;
 
       if (error) throw error;
@@ -84,9 +94,16 @@ export const useProducts = (options?: { includeUnavailable?: boolean }) => {
     price: number;
     category_id: string;
     description?: string;
-    image_url?: string;
+    image_url?: string | null;
     is_available?: boolean;
   }) => {
+    // attach shop_id from context if available
+    let shopId: string | null = null;
+    try {
+      const { currentShop } = useShop();
+      if (currentShop) shopId = currentShop.id;
+    } catch (e) {}
+
     const { data, error } = await supabase
       .from('products')
       .insert({
@@ -96,6 +113,7 @@ export const useProducts = (options?: { includeUnavailable?: boolean }) => {
         description: input.description || null,
         image_url: input.image_url || null,
         is_available: input.is_available ?? true,
+        shop_id: shopId,
       })
       .select(`*, category:categories(name)`).single();
 
@@ -107,19 +125,21 @@ export const useProducts = (options?: { includeUnavailable?: boolean }) => {
   const updateProduct = async (id: string, input: {
     name?: string;
     price?: number;
-    category_id?: string;
-    description?: string;
-    image_url?: string;
+    category_id?: string | null;
+    description?: string | null;
+    image_url?: string | null;
     is_available?: boolean;
   }) => {
+    const payload: any = {
+      ...input,
+    };
+    if (input.category_id !== undefined) payload.category_id = input.category_id || null;
+    if (input.description !== undefined) payload.description = input.description || null;
+    if (input.image_url !== undefined) payload.image_url = input.image_url || null;
+
     const { error } = await supabase
       .from('products')
-      .update({
-        ...input,
-        category_id: input.category_id === undefined ? undefined : (input.category_id || null),
-        description: input.description === undefined ? undefined : (input.description || null),
-        image_url: input.image_url === undefined ? undefined : (input.image_url || null),
-      })
+      .update(payload)
       .eq('id', id);
 
     if (error) throw error;

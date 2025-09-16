@@ -91,12 +91,7 @@ export const useOrders = () => {
       const totalAmount = items.reduce((sum, item) => sum + item.total_price, 0);
 
       // Create order
-      // attach shop_id if available
-      let shopId: string | null = null;
-      try {
-        const { currentShop } = useShop();
-        if (currentShop) shopId = currentShop.id;
-      } catch (e) {}
+      const shopId = currentShop?.id || null;
 
       const { data: orderData, error: orderError } = await supabase
         .from('orders')

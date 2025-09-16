@@ -60,10 +60,7 @@ export const useOrders = () => {
         `)
         .order('created_at', { ascending: false });
 
-      try {
-        const { currentShop } = useShop();
-        if (currentShop) query = query.eq('shop_id', currentShop.id);
-      } catch (e) {}
+      if (currentShop) query = query.eq('shop_id', currentShop.id);
 
       const { data, error } = await query;
 

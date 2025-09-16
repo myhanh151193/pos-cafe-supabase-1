@@ -62,10 +62,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      // Shops table stores uuid in a separate column; user_shops.shop_id is a uuid string.
+      // Query shops by the uuid column and normalize so shop.id is the uuid string used across the app.
       const { data: shopsData, error: shopsError } = await supabase
         .from('shops')
-        .select('id,name,description,created_at,updated_at')
-        .in('id', shopIds)
+        .select('id, uuid, name, description, created_at, updated_at')
+        .in('uuid', shopIds)
         .order('name');
 
       if (shopsError) {
@@ -78,7 +80,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw shopsError;
       }
 
-      const mapped = (shopsData || []) as Shop[];
+      const raw = (shopsData || []) as any[];
+      // Normalize: use uuid as the canonical id (string) so it matches tables.shop_id and user_shops.shop_id
+      const mapped = raw.map((s) => ({
+        id: s.uuid ?? String(s.id),
+        name: s.name,
+        description: s.description,
+        created_at: s.created_at,
+        updated_at: s.updated_at,
+      })) as Shop[];
+
       console.debug('[ShopContext] user', user?.id, 'user_shops', shopIds, 'shops', mapped.map(s=>s.id));
       setShops(mapped);
       if (mapped.length > 0) {

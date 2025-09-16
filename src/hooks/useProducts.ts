@@ -90,7 +90,7 @@ export const useProducts = (options?: { includeUnavailable?: boolean }) => {
     };
 
     loadData();
-  }, []);
+  }, [currentShop?.id]);
 
   const addProduct = async (input: {
     name: string;

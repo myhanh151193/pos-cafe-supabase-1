@@ -66,7 +66,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Query shops by the uuid column and normalize so shop.id is the uuid string used across the app.
       const { data: shopsData, error: shopsError } = await supabase
         .from('shops')
-        .select('id, uuid, name, description, created_at, updated_at')
+        .select('id, uuid, name, created_at, updated_at')
         .in('uuid', shopIds)
         .order('name');
 

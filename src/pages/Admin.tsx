@@ -168,7 +168,7 @@ const Admin = () => {
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">{lowStockItems}</div>
             <p className="text-xs text-muted-foreground">
-              Sản phẩm sắp hết hàng
+              S���n phẩm sắp hết hàng
             </p>
           </CardContent>
         </Card>
@@ -473,6 +473,76 @@ const Admin = () => {
     </div>
   );
 
+  const renderOrders = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Đơn hàng</h2>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <TableComponent>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Mã đơn</TableHead>
+                <TableHead>Bàn</TableHead>
+                <TableHead>Khách hàng</TableHead>
+                <TableHead>Tổng tiền</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead>Thời gian</TableHead>
+                <TableHead>Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orders.map((order) => (
+                <TableRow key={order.id}>
+                  <TableCell className="font-medium">{order.order_number}</TableCell>
+                  <TableCell>{order.table?.table_number ?? '-'}</TableCell>
+                  <TableCell>{order.customer_name || '-'}</TableCell>
+                  <TableCell>{formatPrice(order.total_amount)}</TableCell>
+                  <TableCell>
+                    <Badge variant={order.status === 'pending' ? 'secondary' : order.status === 'completed' ? 'default' : 'destructive'}>
+                      {order.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{new Date(order.created_at).toLocaleString()}</TableCell>
+                  <TableCell className="space-x-2">
+                    {order.status !== 'completed' && (
+                      <Button
+                        variant="pos"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await updateOrderStatus(order.id, 'completed');
+                            toast({ title: 'Đã hoàn tất đơn' });
+                          } catch (e) {
+                            toast({ title: 'Lỗi', description: 'Không thể cập nhật trạng thái', variant: 'destructive' });
+                          }
+                        }}
+                      >
+                        Hoàn tất
+                      </Button>
+                    )}
+                    {order.status !== 'cancelled' && (
+                      <Button variant="destructive" size="sm" onClick={async () => {
+                        try {
+                          await cancelOrder(order.id);
+                          toast({ title: 'Đã hủy đơn' });
+                        } catch (e) {
+                          toast({ title: 'Lỗi', description: 'Không thể hủy đơn', variant: 'destructive' });
+                        }
+                      }}>Hủy</Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </TableComponent>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case "overview":
@@ -485,6 +555,8 @@ const Admin = () => {
         return renderInventory();
       case "tables":
         return renderTables();
+      case "orders":
+        return renderOrders();
       default:
         return renderOverview();
     }
@@ -507,6 +579,7 @@ const Admin = () => {
                   {activeTab === "products" && "Quản lý sản phẩm"}
                   {activeTab === "inventory" && "Quản lý tồn kho"}
                   {activeTab === "tables" && "Quản lý bàn"}
+                  {activeTab === "orders" && "Đơn hàng"}
                 </h1>
               </div>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground">

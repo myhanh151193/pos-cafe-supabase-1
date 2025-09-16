@@ -27,6 +27,14 @@ export const useTables = () => {
 
   const fetchTables = async () => {
     try {
+      // If currentShop is explicitly null (no shops for user) or not set yet,
+      // avoid querying without a shop filter which would return all tables.
+      if (currentShop === null) {
+        setTables([]);
+        console.debug('[useTables] currentShop is null — skipping tables query');
+        return;
+      }
+
       let query = supabase
         .from('tables')
         .select('*')

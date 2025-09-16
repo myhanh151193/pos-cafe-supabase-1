@@ -31,6 +31,14 @@ export const useProducts = (options?: { includeUnavailable?: boolean }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { currentShop } = (() => {
+    try {
+      return useShop();
+    } catch (e) {
+      return { currentShop: null } as any;
+    }
+  })();
+
   const fetchCategories = async () => {
     try {
       const { data, error } = await supabase

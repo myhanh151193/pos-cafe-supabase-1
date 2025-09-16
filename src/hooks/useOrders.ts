@@ -41,7 +41,7 @@ export const useOrders = () => {
 
   const fetchOrders = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('orders')
         .select(`
           *,
@@ -52,6 +52,13 @@ export const useOrders = () => {
           )
         `)
         .order('created_at', { ascending: false });
+
+      try {
+        const { currentShop } = useShop();
+        if (currentShop) query = query.eq('shop_id', currentShop.id);
+      } catch (e) {}
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setOrders(data as Order[] || []);
@@ -112,7 +119,7 @@ export const useOrders = () => {
 
       toast({
         title: "Đã tạo đơn hàng",
-        description: `Đơn hàng ${orderNumber} đã được tạo thành công`,
+        description: `Đơn hàng ${orderNumber} đã được tạo th��nh công`,
       });
 
       return orderData;

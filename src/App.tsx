@@ -5,9 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { OrderProvider } from "./contexts/OrderContext";
 import Index from "./pages/Index";
-import Kitchen from "./pages/Kitchen";
+import Kitchen from "./pages/Kitchen.tsx";
 import Admin from "./pages/Admin";
-import NotFound from "./pages/NotFound";
+import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
 

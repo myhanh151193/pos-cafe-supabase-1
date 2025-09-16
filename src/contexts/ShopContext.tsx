@@ -79,6 +79,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const mapped = (shopsData || []) as Shop[];
+      console.debug('[ShopContext] user', user?.id, 'user_shops', shopIds, 'shops', mapped.map(s=>s.id));
       setShops(mapped);
       if (mapped.length > 0) {
         setCurrentShop((prev) => prev ?? mapped[0]);

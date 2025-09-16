@@ -17,6 +17,14 @@ export const useTables = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { currentShop } = (() => {
+    try {
+      return useShop();
+    } catch (e) {
+      return { currentShop: null } as any;
+    }
+  })();
+
   const fetchTables = async () => {
     try {
       let query = supabase

@@ -64,9 +64,11 @@ export const useAuth = () => {
   return ctx;
 };
 
+import { Navigate } from "react-router-dom";
+
 export const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <></>; // Caller should handle navigation; keep minimal
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 };

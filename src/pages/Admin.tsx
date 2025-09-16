@@ -37,6 +37,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useProducts } from "@/hooks/useProducts";
 import { useTables } from "@/hooks/useTables";
 import { useOrders } from "@/hooks/useOrders";
+import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
@@ -61,6 +62,8 @@ const Admin = () => {
     category_id: "",
     description: "",
     image_url: "",
+    image_file: null as File | null,
+    image_preview: "",
     is_available: true,
   });
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -549,8 +552,30 @@ const Admin = () => {
             </div>
 
             <div>
-              <Label>Ảnh (URL)</Label>
-              <Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} />
+              <Label>Ảnh sản phẩm</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  if (file) {
+                    const preview = URL.createObjectURL(file);
+                    setForm({ ...form, image_file: file, image_preview: preview });
+                  } else {
+                    setForm({ ...form, image_file: null, image_preview: "" });
+                  }
+                }}
+              />
+
+              {form.image_preview ? (
+                <div className="mt-2">
+                  <img src={form.image_preview} alt="preview" className="h-28 object-cover rounded" />
+                </div>
+              ) : form.image_url ? (
+                <div className="mt-2">
+                  <img src={form.image_url} alt="current" className="h-28 object-cover rounded" />
+                </div>
+              ) : null}
             </div>
 
             <div>
@@ -569,16 +594,43 @@ const Admin = () => {
             <Button
               onClick={async () => {
                 try {
+                  // handle image upload if a file was selected
+                  let imageUrl = form.image_url || null;
+                  if (form.image_file) {
+                    const file = form.image_file as File;
+                    const ext = file.name.split('.').pop();
+                    const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+                    const path = `${filename}`;
+                    const { error: uploadError } = await supabase.storage.from('products').upload(path, file);
+                    if (uploadError) throw uploadError;
+                    const { data } = supabase.storage.from('products').getPublicUrl(path);
+                    imageUrl = (data as any)?.publicUrl || null;
+                  }
+
+                  const payload = {
+                    name: form.name,
+                    price: Number(form.price),
+                    category_id: form.category_id || null,
+                    description: form.description || null,
+                    image_url: imageUrl,
+                    is_available: form.is_available,
+                  };
+
                   if (editingProduct) {
-                    await updateProduct(editingProduct.id, form);
+                    await updateProduct(editingProduct.id, payload);
                     toast({ title: "Đã cập nhật sản phẩm" });
                   } else {
-                    await addProduct(form);
+                    await addProduct(payload as any);
                     toast({ title: "Đã thêm sản phẩm" });
                   }
+
                   setIsProductDialogOpen(false);
                   setEditingProduct(null);
+                  // reset preview
+                  setForm({ name: "", price: 0, category_id: categories[0]?.id || "", description: "", image_url: "", image_file: null, image_preview: "", is_available: true });
+                  await refetch();
                 } catch (e) {
+                  console.error(e);
                   toast({ title: "Lỗi", description: "Không thể lưu sản phẩm", variant: "destructive" });
                 }
               }}

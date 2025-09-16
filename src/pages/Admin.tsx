@@ -56,6 +56,14 @@ const Admin = () => {
   const { toast } = useToast();
   const { shops, currentShop, setCurrentShopById, loading: shopLoading } = useShop();
 
+  // Orders UI state: filters, pagination
+  const [orderFilterStatus, setOrderFilterStatus] = useState<string>("all");
+  const [orderSearch, setOrderSearch] = useState<string>("");
+  const [orderDateFrom, setOrderDateFrom] = useState<string>("");
+  const [orderDateTo, setOrderDateTo] = useState<string>("");
+  const [orderPage, setOrderPage] = useState<number>(1);
+  const [orderPageSize, setOrderPageSize] = useState<number>(10);
+
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [form, setForm] = useState({
@@ -168,7 +176,7 @@ const Admin = () => {
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">{lowStockItems}</div>
             <p className="text-xs text-muted-foreground">
-              S���n phẩm sắp hết hàng
+              Sản phẩm sắp hết hàng
             </p>
           </CardContent>
         </Card>
@@ -473,14 +481,86 @@ const Admin = () => {
     </div>
   );
 
+  // Computed filtered + paginated orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      if (orderFilterStatus !== 'all' && order.status !== orderFilterStatus) return false;
+      if (orderSearch) {
+        const q = orderSearch.toLowerCase();
+        if (!(order.order_number?.toLowerCase().includes(q) || (order.customer_name || '').toLowerCase().includes(q))) return false;
+      }
+      if (orderDateFrom) {
+        const from = new Date(orderDateFrom).setHours(0,0,0,0);
+        if (new Date(order.created_at).getTime() < from) return false;
+      }
+      if (orderDateTo) {
+        const to = new Date(orderDateTo).setHours(23,59,59,999);
+        if (new Date(order.created_at).getTime() > to) return false;
+      }
+      return true;
+    });
+  }, [orders, orderFilterStatus, orderSearch, orderDateFrom, orderDateTo]);
+
+  const totalOrdersFiltered = filteredOrders.length;
+  const totalOrderPages = Math.max(1, Math.ceil(totalOrdersFiltered / orderPageSize));
+  const paginatedOrders = filteredOrders.slice((orderPage - 1) * orderPageSize, orderPage * orderPageSize);
+
+  const exportCSV = () => {
+    const headers = ['order_number','table_number','customer_name','total_amount','status','created_at'];
+    const rows = filteredOrders.map(o => ([
+      o.order_number,
+      o.table?.table_number ?? '-',
+      o.customer_name ?? '-',
+      o.total_amount,
+      o.status,
+      o.created_at,
+    ]));
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `orders_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const renderOrders = () => (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Đơn hàng</h2>
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" size="sm" onClick={() => { setOrderPage(1); setOrderFilterStatus('all'); setOrderSearch(''); setOrderDateFrom(''); setOrderDateTo(''); }}>Reset</Button>
+          <Button variant="pos" size="sm" onClick={exportCSV}>Xuất CSV</Button>
+        </div>
       </div>
 
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+            <div>
+              <label className="text-sm font-medium">Trạng thái</label>
+              <select className="w-full mt-1 p-2 border rounded" value={orderFilterStatus} onChange={(e) => { setOrderFilterStatus(e.target.value); setOrderPage(1); }}>
+                <option value="all">Tất cả</option>
+                <option value="pending">pending</option>
+                <option value="completed">completed</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Từ ngày</label>
+              <Input type="date" value={orderDateFrom} onChange={(e) => { setOrderDateFrom(e.target.value); setOrderPage(1); }} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Đến ngày</label>
+              <Input type="date" value={orderDateTo} onChange={(e) => { setOrderDateTo(e.target.value); setOrderPage(1); }} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Tìm</label>
+              <Input placeholder="Mã đơn hoặc khách" value={orderSearch} onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }} />
+            </div>
+          </div>
+
           <TableComponent>
             <TableHeader>
               <TableRow>
@@ -494,7 +574,7 @@ const Admin = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.map((order) => (
+              {paginatedOrders.map((order) => (
                 <TableRow key={order.id}>
                   <TableCell className="font-medium">{order.order_number}</TableCell>
                   <TableCell>{order.table?.table_number ?? '-'}</TableCell>
@@ -538,6 +618,20 @@ const Admin = () => {
               ))}
             </TableBody>
           </TableComponent>
+
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">Hiển thị {(orderPage-1)*orderPageSize + 1} - {Math.min(orderPage*orderPageSize, totalOrdersFiltered)} trên {totalOrdersFiltered} đơn</div>
+            <div className="flex items-center space-x-2">
+              <select value={orderPageSize} onChange={(e) => { setOrderPageSize(Number(e.target.value)); setOrderPage(1); }} className="p-1 border rounded">
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+              </select>
+              <Button variant="outline" size="sm" onClick={() => setOrderPage(Math.max(1, orderPage-1))}>Prev</Button>
+              <div className="px-2">{orderPage} / {totalOrderPages}</div>
+              <Button variant="outline" size="sm" onClick={() => setOrderPage(Math.min(totalOrderPages, orderPage+1))}>Next</Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -32,12 +32,7 @@ export const useTables = () => {
         .select('*')
         .order('table_number');
 
-      try {
-        const { currentShop } = useShop();
-        if (currentShop) query = query.eq('shop_id', currentShop.id);
-      } catch (e) {
-        // if hook not available, ignore
-      }
+      if (currentShop) query = query.eq('shop_id', currentShop.id);
 
       const { data, error } = await query;
 

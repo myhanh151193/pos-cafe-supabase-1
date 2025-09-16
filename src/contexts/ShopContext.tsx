@@ -36,23 +36,59 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setLoading(true);
     try {
-      // user_shops table expected to have user_id and shop_id, with shops table
-      const { data, error } = await supabase
+      // First fetch user_shops entries to get shop IDs (more robust across schemas/RLS)
+      const { data: usData, error: usError } = await supabase
         .from('user_shops')
-        .select('shop_id, shop:shops(id,name,description,created_at,updated_at)')
+        .select('shop_id')
         .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (usError) {
+        // provide detailed logging
+        console.error('Error fetching user_shops:', {
+          message: usError.message,
+          details: (usError as any).details,
+          hint: (usError as any).hint,
+          code: (usError as any).code,
+        });
+        throw usError;
+      }
 
-      const mapped = (data || []).map((row: any) => row.shop).filter(Boolean) as Shop[];
+      const shopIds = (usData || []).map((r: any) => r.shop_id).filter(Boolean);
+
+      if (shopIds.length === 0) {
+        setShops([]);
+        setCurrentShop(null);
+        setLoading(false);
+        return;
+      }
+
+      const { data: shopsData, error: shopsError } = await supabase
+        .from('shops')
+        .select('id,name,description,created_at,updated_at')
+        .in('id', shopIds)
+        .order('name');
+
+      if (shopsError) {
+        console.error('Error fetching shops rows:', {
+          message: shopsError.message,
+          details: (shopsError as any).details,
+          hint: (shopsError as any).hint,
+          code: (shopsError as any).code,
+        });
+        throw shopsError;
+      }
+
+      const mapped = (shopsData || []) as Shop[];
       setShops(mapped);
       if (mapped.length > 0) {
         setCurrentShop((prev) => prev ?? mapped[0]);
       } else {
         setCurrentShop(null);
       }
-    } catch (err) {
-      console.error('Error fetching shops for user:', err);
+    } catch (err: any) {
+      // Try to extract useful info
+      const message = err?.message || JSON.stringify(err);
+      console.error('Error fetching shops for user:', message, err);
       setShops([]);
       setCurrentShop(null);
     } finally {

@@ -100,12 +100,7 @@ export const useProducts = (options?: { includeUnavailable?: boolean }) => {
     image_url?: string | null;
     is_available?: boolean;
   }) => {
-    // attach shop_id from context if available
-    let shopId: string | null = null;
-    try {
-      const { currentShop } = useShop();
-      if (currentShop) shopId = currentShop.id;
-    } catch (e) {}
+    const shopId = currentShop?.id || null;
 
     const { data, error } = await supabase
       .from('products')

@@ -39,6 +39,7 @@ import { useTables } from "@/hooks/useTables";
 import { useOrders } from "@/hooks/useOrders";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { useShop } from "@/contexts/ShopContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 
@@ -53,6 +54,7 @@ const Admin = () => {
   const { orders, loading: ordersLoading } = useOrders();
   
   const { toast } = useToast();
+  const { shops, currentShop, setCurrentShopById, loading: shopLoading } = useShop();
 
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -509,6 +511,18 @@ const Admin = () => {
               </div>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                 <span>Hệ thống quản trị</span>
+                <div>
+                  <Select value={currentShop?.id || ""} onValueChange={(v) => setCurrentShopById(v || null)}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder={shopLoading ? "Đang tải..." : "Chọn cửa hàng"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {shops.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </header>

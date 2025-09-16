@@ -19,10 +19,19 @@ export const useTables = () => {
 
   const fetchTables = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tables')
         .select('*')
         .order('table_number');
+
+      try {
+        const { currentShop } = useShop();
+        if (currentShop) query = query.eq('shop_id', currentShop.id);
+      } catch (e) {
+        // if hook not available, ignore
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setTables(data as Table[] || []);

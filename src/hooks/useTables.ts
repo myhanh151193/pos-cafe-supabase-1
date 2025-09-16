@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useShop } from '@/contexts/ShopContext';
 
 export interface Table {
   id: string;
@@ -16,15 +17,37 @@ export const useTables = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { currentShop } = (() => {
+    try {
+      return useShop();
+    } catch (e) {
+      return { currentShop: null } as any;
+    }
+  })();
+
   const fetchTables = async () => {
     try {
-      const { data, error } = await supabase
+      // If currentShop is explicitly null (no shops for user) or not set yet,
+      // avoid querying without a shop filter which would return all tables.
+      if (currentShop === null) {
+        setTables([]);
+        console.debug('[useTables] currentShop is null — skipping tables query');
+        return;
+      }
+
+      let query = supabase
         .from('tables')
         .select('*')
         .order('table_number');
 
+      if (currentShop) query = query.eq('shop_id', currentShop.id);
+
+      const { data, error } = await query;
+
       if (error) throw error;
-      setTables(data as Table[] || []);
+      const rows = data as Table[] || [];
+      console.debug('[useTables] fetched', rows.length, 'tables for shop', currentShop?.id, rows.map(r=>r.id));
+      setTables(rows);
     } catch (err) {
       console.error('Error fetching tables:', err);
       setError('Không thể tải danh sách bàn');
@@ -86,7 +109,7 @@ export const useTables = () => {
     };
 
     loadTables();
-  }, []);
+  }, [currentShop?.id]);
 
   return {
     tables,

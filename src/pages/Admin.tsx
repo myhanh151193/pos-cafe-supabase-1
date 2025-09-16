@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { 
@@ -37,6 +37,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useProducts } from "@/hooks/useProducts";
 import { useTables } from "@/hooks/useTables";
 import { useOrders } from "@/hooks/useOrders";
+import { supabase } from "@/integrations/supabase/client";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { useShop } from "@/contexts/ShopContext";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 
 // Using the types from hooks
 import type { Product } from "@/hooks/useProducts";
@@ -44,11 +49,34 @@ import type { Table as TableType } from "@/hooks/useTables";
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState("overview");
-  const { products, categories, loading: productsLoading } = useProducts();
+  const { products, categories, loading: productsLoading, addProduct, updateProduct, deleteProduct, refetch } = useProducts({ includeUnavailable: true });
   const { tables, loading: tablesLoading } = useTables();
   const { orders, loading: ordersLoading } = useOrders();
   
   const { toast } = useToast();
+  const { shops, currentShop, setCurrentShopById, loading: shopLoading } = useShop();
+
+  // Orders UI state: filters, pagination
+  const [orderFilterStatus, setOrderFilterStatus] = useState<string>("all");
+  const [orderSearch, setOrderSearch] = useState<string>("");
+  const [orderDateFrom, setOrderDateFrom] = useState<string>("");
+  const [orderDateTo, setOrderDateTo] = useState<string>("");
+  const [orderPage, setOrderPage] = useState<number>(1);
+  const [orderPageSize, setOrderPageSize] = useState<number>(10);
+
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    price: 0,
+    category_id: "",
+    description: "",
+    image_url: "",
+    image_file: null as File | null,
+    image_preview: "",
+    is_available: true,
+  });
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -281,6 +309,16 @@ const Admin = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Danh sách sản phẩm</h2>
+        <Button
+          variant="pos"
+          onClick={() => {
+            setEditingProduct(null);
+            setForm({ name: "", price: 0, category_id: categories[0]?.id || "", description: "", image_url: "", is_available: true });
+            setIsProductDialogOpen(true);
+          }}
+        >
+          <Plus className="w-4 h-4 mr-2" /> Thêm sản phẩm
+        </Button>
       </div>
 
         <Card>
@@ -293,6 +331,7 @@ const Admin = () => {
                   <TableHead>Giá bán</TableHead>
                   <TableHead>Mô tả</TableHead>
                   <TableHead>Trạng thái</TableHead>
+                  <TableHead>Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -306,6 +345,33 @@ const Admin = () => {
                       <Badge variant={product.is_available ? "default" : "outline"}>
                         {product.is_available ? "Có sẵn" : "Hết hàng"}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingProduct(product);
+                          setForm({
+                            name: product.name,
+                            price: product.price,
+                            category_id: product.category_id || "",
+                            description: product.description || "",
+                            image_url: product.image_url || "",
+                            is_available: product.is_available,
+                          });
+                          setIsProductDialogOpen(true);
+                        }}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setProductToDelete(product)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -415,6 +481,162 @@ const Admin = () => {
     </div>
   );
 
+  // Computed filtered + paginated orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      if (orderFilterStatus !== 'all' && order.status !== orderFilterStatus) return false;
+      if (orderSearch) {
+        const q = orderSearch.toLowerCase();
+        if (!(order.order_number?.toLowerCase().includes(q) || (order.customer_name || '').toLowerCase().includes(q))) return false;
+      }
+      if (orderDateFrom) {
+        const from = new Date(orderDateFrom).setHours(0,0,0,0);
+        if (new Date(order.created_at).getTime() < from) return false;
+      }
+      if (orderDateTo) {
+        const to = new Date(orderDateTo).setHours(23,59,59,999);
+        if (new Date(order.created_at).getTime() > to) return false;
+      }
+      return true;
+    });
+  }, [orders, orderFilterStatus, orderSearch, orderDateFrom, orderDateTo]);
+
+  const totalOrdersFiltered = filteredOrders.length;
+  const totalOrderPages = Math.max(1, Math.ceil(totalOrdersFiltered / orderPageSize));
+  const paginatedOrders = filteredOrders.slice((orderPage - 1) * orderPageSize, orderPage * orderPageSize);
+
+  const exportCSV = () => {
+    const headers = ['order_number','table_number','customer_name','total_amount','status','created_at'];
+    const rows = filteredOrders.map(o => ([
+      o.order_number,
+      o.table?.table_number ?? '-',
+      o.customer_name ?? '-',
+      o.total_amount,
+      o.status,
+      o.created_at,
+    ]));
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `orders_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const renderOrders = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Đơn hàng</h2>
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" size="sm" onClick={() => { setOrderPage(1); setOrderFilterStatus('all'); setOrderSearch(''); setOrderDateFrom(''); setOrderDateTo(''); }}>Reset</Button>
+          <Button variant="pos" size="sm" onClick={exportCSV}>Xuất CSV</Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+            <div>
+              <label className="text-sm font-medium">Trạng thái</label>
+              <select className="w-full mt-1 p-2 border rounded" value={orderFilterStatus} onChange={(e) => { setOrderFilterStatus(e.target.value); setOrderPage(1); }}>
+                <option value="all">Tất cả</option>
+                <option value="pending">pending</option>
+                <option value="completed">completed</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Từ ngày</label>
+              <Input type="date" value={orderDateFrom} onChange={(e) => { setOrderDateFrom(e.target.value); setOrderPage(1); }} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Đến ngày</label>
+              <Input type="date" value={orderDateTo} onChange={(e) => { setOrderDateTo(e.target.value); setOrderPage(1); }} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Tìm</label>
+              <Input placeholder="Mã đơn hoặc khách" value={orderSearch} onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }} />
+            </div>
+          </div>
+
+          <TableComponent>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Mã đơn</TableHead>
+                <TableHead>Bàn</TableHead>
+                <TableHead>Khách hàng</TableHead>
+                <TableHead>Tổng tiền</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead>Thời gian</TableHead>
+                <TableHead>Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedOrders.map((order) => (
+                <TableRow key={order.id}>
+                  <TableCell className="font-medium">{order.order_number}</TableCell>
+                  <TableCell>{order.table?.table_number ?? '-'}</TableCell>
+                  <TableCell>{order.customer_name || '-'}</TableCell>
+                  <TableCell>{formatPrice(order.total_amount)}</TableCell>
+                  <TableCell>
+                    <Badge variant={order.status === 'pending' ? 'secondary' : order.status === 'completed' ? 'default' : 'destructive'}>
+                      {order.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{new Date(order.created_at).toLocaleString()}</TableCell>
+                  <TableCell className="space-x-2">
+                    {order.status !== 'completed' && (
+                      <Button
+                        variant="pos"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await updateOrderStatus(order.id, 'completed');
+                            toast({ title: 'Đã hoàn tất đơn' });
+                          } catch (e) {
+                            toast({ title: 'Lỗi', description: 'Không thể cập nhật trạng thái', variant: 'destructive' });
+                          }
+                        }}
+                      >
+                        Hoàn tất
+                      </Button>
+                    )}
+                    {order.status !== 'cancelled' && (
+                      <Button variant="destructive" size="sm" onClick={async () => {
+                        try {
+                          await cancelOrder(order.id);
+                          toast({ title: 'Đã hủy đơn' });
+                        } catch (e) {
+                          toast({ title: 'Lỗi', description: 'Không thể hủy đơn', variant: 'destructive' });
+                        }
+                      }}>Hủy</Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </TableComponent>
+
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">Hiển thị {(orderPage-1)*orderPageSize + 1} - {Math.min(orderPage*orderPageSize, totalOrdersFiltered)} trên {totalOrdersFiltered} đơn</div>
+            <div className="flex items-center space-x-2">
+              <select value={orderPageSize} onChange={(e) => { setOrderPageSize(Number(e.target.value)); setOrderPage(1); }} className="p-1 border rounded">
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+              </select>
+              <Button variant="outline" size="sm" onClick={() => setOrderPage(Math.max(1, orderPage-1))}>Prev</Button>
+              <div className="px-2">{orderPage} / {totalOrderPages}</div>
+              <Button variant="outline" size="sm" onClick={() => setOrderPage(Math.min(totalOrderPages, orderPage+1))}>Next</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case "overview":
@@ -427,6 +649,8 @@ const Admin = () => {
         return renderInventory();
       case "tables":
         return renderTables();
+      case "orders":
+        return renderOrders();
       default:
         return renderOverview();
     }
@@ -449,10 +673,23 @@ const Admin = () => {
                   {activeTab === "products" && "Quản lý sản phẩm"}
                   {activeTab === "inventory" && "Quản lý tồn kho"}
                   {activeTab === "tables" && "Quản lý bàn"}
+                  {activeTab === "orders" && "Đơn hàng"}
                 </h1>
               </div>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                 <span>Hệ thống quản trị</span>
+                <div>
+                  <Select value={currentShop?.id || ""} onValueChange={(v) => setCurrentShopById(v || null)}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder={shopLoading ? "Đang tải..." : "Chọn cửa hàng"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {shops.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </header>
@@ -463,6 +700,155 @@ const Admin = () => {
           </main>
         </div>
       </div>
+      <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingProduct ? "Sửa sản phẩm" : "Thêm sản phẩm"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Tên sản phẩm</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Giá bán (VND)</Label>
+                <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
+              </div>
+            </div>
+
+            <div>
+              <Label>Danh mục</Label>
+              <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn danh mục" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Ảnh sản phẩm</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  if (file) {
+                    const preview = URL.createObjectURL(file);
+                    setForm({ ...form, image_file: file, image_preview: preview });
+                  } else {
+                    setForm({ ...form, image_file: null, image_preview: "" });
+                  }
+                }}
+              />
+
+              {form.image_preview ? (
+                <div className="mt-2">
+                  <img src={form.image_preview} alt="preview" className="h-28 object-cover rounded" />
+                </div>
+              ) : form.image_url ? (
+                <div className="mt-2">
+                  <img src={form.image_url} alt="current" className="h-28 object-cover rounded" />
+                </div>
+              ) : null}
+            </div>
+
+            <div>
+              <Label>Mô tả</Label>
+              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox id="is_available" checked={form.is_available} onCheckedChange={(v) => setForm({ ...form, is_available: Boolean(v) })} />
+              <Label htmlFor="is_available">Có sẵn</Label>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsProductDialogOpen(false)}>Hủy</Button>
+            <Button
+              onClick={async () => {
+                try {
+                  // handle image upload if a file was selected
+                  let imageUrl = form.image_url || null;
+                  if (form.image_file) {
+                    const file = form.image_file as File;
+                    const ext = file.name.split('.').pop();
+                    const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+                    const path = `${filename}`;
+                    const { error: uploadError } = await supabase.storage.from('products').upload(path, file);
+                    if (uploadError) throw uploadError;
+                    const { data } = supabase.storage.from('products').getPublicUrl(path);
+                    imageUrl = (data as any)?.publicUrl || null;
+                  }
+
+                  const payload = {
+                    name: form.name,
+                    price: Number(form.price),
+                    category_id: form.category_id || null,
+                    description: form.description || null,
+                    image_url: imageUrl,
+                    is_available: form.is_available,
+                  };
+
+                  if (editingProduct) {
+                    await updateProduct(editingProduct.id, payload);
+                    toast({ title: "Đã cập nhật sản phẩm" });
+                  } else {
+                    await addProduct(payload as any);
+                    toast({ title: "Đã thêm sản phẩm" });
+                  }
+
+                  setIsProductDialogOpen(false);
+                  setEditingProduct(null);
+                  // reset preview
+                  setForm({ name: "", price: 0, category_id: categories[0]?.id || "", description: "", image_url: "", image_file: null, image_preview: "", is_available: true });
+                  await refetch();
+                } catch (e) {
+                  console.error(e);
+                  toast({ title: "Lỗi", description: "Không thể lưu sản phẩm", variant: "destructive" });
+                }
+              }}
+            >
+              Lưu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!productToDelete} onOpenChange={(open) => { if (!open) setProductToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa sản phẩm?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (productToDelete) {
+                  try {
+                    await deleteProduct(productToDelete.id);
+                    toast({ title: "Đã xóa sản phẩm" });
+                  } catch (e) {
+                    toast({ title: "Lỗi", description: "Không thể xóa sản phẩm", variant: "destructive" });
+                  } finally {
+                    setProductToDelete(null);
+                  }
+                }
+              }}
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </SidebarProvider>
   );
 };

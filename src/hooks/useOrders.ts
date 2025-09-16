@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useShop } from '@/contexts/ShopContext';
 
 export interface OrderItem {
   id?: string;
@@ -37,10 +38,17 @@ export const useOrders = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { currentShop } = (() => {
+    try {
+      return useShop();
+    } catch (e) {
+      return { currentShop: null } as any;
+    }
+  })();
 
   const fetchOrders = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('orders')
         .select(`
           *,
@@ -51,6 +59,10 @@ export const useOrders = () => {
           )
         `)
         .order('created_at', { ascending: false });
+
+      if (currentShop) query = query.eq('shop_id', currentShop.id);
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setOrders(data as Order[] || []);
@@ -79,6 +91,8 @@ export const useOrders = () => {
       const totalAmount = items.reduce((sum, item) => sum + item.total_price, 0);
 
       // Create order
+      const shopId = currentShop?.id || null;
+
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -87,7 +101,8 @@ export const useOrders = () => {
           total_amount: totalAmount,
           customer_name: customerName,
           notes: notes,
-          status: 'pending'
+          status: 'pending',
+          shop_id: shopId,
         })
         .select()
         .single();
@@ -196,7 +211,7 @@ export const useOrders = () => {
     };
 
     loadOrders();
-  }, []);
+  }, [currentShop?.id]);
 
   return {
     orders,

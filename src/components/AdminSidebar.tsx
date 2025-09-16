@@ -28,6 +28,7 @@ const menuItems = [
   { title: "Tổng quan", url: "/admin?tab=overview", icon: BarChart3, tab: "overview" },
   { title: "Báo cáo", url: "/admin?tab=reports", icon: FileText, tab: "reports" },
   { title: "Sản phẩm", url: "/admin?tab=products", icon: Package, tab: "products" },
+  { title: "Đơn hàng", url: "/admin?tab=orders", icon: FileText, tab: "orders" },
   { title: "Tồn kho", url: "/admin?tab=inventory", icon: Warehouse, tab: "inventory" },
   { title: "Bàn", url: "/admin?tab=tables", icon: Users, tab: "tables" },
 ];

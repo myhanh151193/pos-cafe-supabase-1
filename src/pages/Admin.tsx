@@ -37,6 +37,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useProducts } from "@/hooks/useProducts";
 import { useTables } from "@/hooks/useTables";
 import { useOrders } from "@/hooks/useOrders";
+import { useCurrentShop } from "@/hooks/useCurrentShop";
 
 // Using the types from hooks
 import type { Product } from "@/hooks/useProducts";

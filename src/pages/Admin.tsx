@@ -454,7 +454,7 @@ const Admin = () => {
                 </h1>
               </div>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                <span>Cửa hàng: {useCurrentShop().shopName}</span>
+                <span>Cửa hàng: {shopName}</span>
                 <span>Hệ thống quản trị</span>
               </div>
             </div>

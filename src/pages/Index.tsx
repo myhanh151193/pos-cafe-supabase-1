@@ -311,7 +311,7 @@ const Index = () => {
     if (!selectedTable || cartItems.length === 0) {
       toast({
         title: "Giỏ hàng trống",
-        description: "Không có đơn hàng để xóa",
+        description: "Không c�� đơn hàng để xóa",
         variant: "destructive"
       });
       return;
@@ -457,7 +457,7 @@ const Index = () => {
               selectedTable={selectedTable}
               onTableSelect={handleTableSelect}
               onConfirmTable={handleConfirmTable}
-              confirmedOrders={confirmedOrders}
+              confirmedOrders={mergedTotals}
               formatPrice={formatPrice}
               onUpdateTableNote={handleUpdateTableNote}
             />

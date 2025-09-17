@@ -51,11 +51,25 @@ const Index = () => {
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [activeCategory, setActiveCategory] = useState("Tất cả");
   const [searchTerm, setSearchTerm] = useState("");
-  const [tableCartItems, setTableCartItems] = useState<{[tableId: string]: CartItemType[]}>({});
+  const [tableCartItems, setTableCartItems] = useState<{[tableId: string]: CartItemType[]}>(() => {
+    try {
+      const raw = localStorage.getItem("tableCartItems");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [vatPercent, setVatPercent] = useState(10);
-  const [confirmedOrders, setConfirmedOrders] = useState<{[tableId: string]: number}>({});
+  const [confirmedOrders, setConfirmedOrders] = useState<{[tableId: string]: number}>(() => {
+    try {
+      const raw = localStorage.getItem("confirmedOrders");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
   const { toast } = useToast();
   
   // Use hooks to fetch data from Supabase
@@ -303,7 +317,7 @@ const Index = () => {
     });
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cartItems.length === 0) {
       toast({
         title: "Giỏ hàng trống",
@@ -317,21 +331,28 @@ const Index = () => {
       title: "Thanh toán thành công!",
       description: `Bàn ${selectedTable?.table_number} - Tổng tiền: ${formatPrice(calculateTotal())}`,
     });
-    
+
+    try {
+      if (selectedTable) {
+        await updateTableStatus(selectedTable.id, 'available');
+      }
+    } catch (e) {
+      console.error('Error resetting table status:', e);
+    }
+
     setTableCartItems(prev => {
       if (!selectedTable) return prev;
       const updated = { ...prev };
       delete updated[selectedTable.id];
       return updated;
     });
-    
+
     setConfirmedOrders(prev => {
       const updated = { ...prev };
-      delete updated[selectedTable.id];
+      if (selectedTable) delete updated[selectedTable.id];
       return updated;
     });
-    
-    // Reset về tab chọn bàn sau khi thanh toán
+
     setActiveTab("tables");
     setSelectedTable(null);
   };
@@ -347,6 +368,18 @@ const Index = () => {
       console.error('Error updating table note:', error);
     }
   };
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("tableCartItems", JSON.stringify(tableCartItems));
+    } catch {}
+  }, [tableCartItems]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("confirmedOrders", JSON.stringify(confirmedOrders));
+    } catch {}
+  }, [confirmedOrders]);
 
   return (
     <div className="min-h-screen bg-background">

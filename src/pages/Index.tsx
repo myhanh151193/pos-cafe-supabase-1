@@ -77,6 +77,7 @@ const Index = () => {
   const { products, categories: dbCategories, loading: productsLoading } = useProducts();
   const { tables, updateTableStatus, updateTableNotes } = useTables();
   const { createOrder, orders } = useOrders();
+  const { shopName } = useCurrentShop();
 
   // Totals from backend (unpaid orders) merged with local confirmed totals
   const backendOpenTotals = React.useMemo(() => {
@@ -298,7 +299,7 @@ const Index = () => {
         }));
         
         toast({
-          title: "Đã xác nhận đơn hàng!",
+          title: "��ã xác nhận đơn hàng!",
           description: `Bàn ${selectedTable.table_number} - Tổng tiền: ${formatPrice(orderTotal)} - Đã gửi đến bếp`,
         });
       } catch (error) {
@@ -430,7 +431,7 @@ const Index = () => {
                 <span>Bàn {selectedTable.table_number}</span>
               </div>
             )}
-            <span>C���a hàng: {useCurrentShop().shopName}</span>
+            <span>Cửa hàng: {shopName}</span>
             <span>Hệ thống bán hàng</span>
           </div>
         </div>

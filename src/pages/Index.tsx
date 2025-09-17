@@ -26,6 +26,7 @@ import { Link } from "react-router-dom";
 
 interface CartItemType {
   id: string;
+  productId: string;
   name: string;
   price: number;
   quantity: number;
@@ -128,7 +129,7 @@ const Index = () => {
       .sort()
       .join(',') : '';
     
-    const cartItemId = `${product.id}-${size?.name || 'default'}-${toppingsStr}`;
+    const cartItemId = `${product.id}|${size?.name || 'default'}|${toppingsStr}`;
     const basePrice = size?.price || Number(product.price);
     
     // Calculate toppings price
@@ -162,6 +163,7 @@ const Index = () => {
           )
         : [...tableItems, {
             id: cartItemId,
+            productId: product.id,
             name: product.name,
             price: totalPrice,
             quantity: 1,
@@ -244,7 +246,7 @@ const Index = () => {
         
         // Prepare order items for database
         const orderItems = cartItems.map(item => ({
-          product_id: item.id.split('-')[0], // Extract original product ID
+          product_id: item.productId,
           quantity: item.quantity,
           unit_price: item.price / item.quantity,
           total_price: item.price * item.quantity,
@@ -267,7 +269,8 @@ const Index = () => {
           description: `Bàn ${selectedTable.table_number} - Tổng tiền: ${formatPrice(orderTotal)} - Đã gửi đến bếp`,
         });
       } catch (error) {
-        console.error('Error confirming order:', error);
+        const errMsg = error instanceof Error ? error.message : JSON.stringify(error);
+        console.error('Error confirming order:', errMsg);
       }
     }
   };

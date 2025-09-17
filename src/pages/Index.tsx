@@ -77,10 +77,28 @@ const Index = () => {
   const { tables, updateTableStatus, updateTableNotes } = useTables();
   const { createOrder, orders } = useOrders();
 
+  // Totals from backend (unpaid orders) merged with local confirmed totals
+  const backendOpenTotals = React.useMemo(() => {
+    const map: { [tableId: string]: number } = {};
+    orders
+      .filter(o => o.status !== 'paid' && o.status !== 'cancelled')
+      .forEach(o => {
+        if (o.table_id) {
+          map[o.table_id] = (map[o.table_id] || 0) + o.total_amount;
+        }
+      });
+    return map;
+  }, [orders]);
+
+  const mergedTotals: { [tableId: string]: number } = React.useMemo(() => ({
+    ...backendOpenTotals,
+    ...confirmedOrders,
+  }), [backendOpenTotals, confirmedOrders]);
+
   // Get cart items for current table
   const cartItems = selectedTable ? (tableCartItems[selectedTable.id] || []) : [];
 
-  // Categories for filter (add "T��t cả" to database categories)
+  // Categories for filter (add "Tất cả" to database categories)
   const categories = ["Tất cả", ...dbCategories.map(cat => cat.name)];
 
   // Filter products by category and search

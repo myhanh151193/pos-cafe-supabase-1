@@ -311,7 +311,7 @@ const Index = () => {
     if (!selectedTable || cartItems.length === 0) {
       toast({
         title: "Giỏ hàng trống",
-        description: "Không c�� đơn hàng để xóa",
+        description: "Không có đơn hàng để xóa",
         variant: "destructive"
       });
       return;
@@ -429,6 +429,7 @@ const Index = () => {
                 <span>Bàn {selectedTable.table_number}</span>
               </div>
             )}
+            <span>Cửa hàng: {typeof window !== 'undefined' ? (localStorage.getItem('currentShop') || '—') : '—'}</span>
             <span>Hệ thống bán hàng</span>
           </div>
         </div>

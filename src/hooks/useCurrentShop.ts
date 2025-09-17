@@ -22,7 +22,7 @@ export const useCurrentShop = () => {
         if (uid) {
           // Try to fetch shop record where id equals user id
           const { data } = await supabase
-            .from("shops")
+            .from("shop")
             .select("id, name")
             .eq("id", uid)
             .single();

@@ -15,6 +15,7 @@ import { TableManager } from "@/components/TableManager";
 import { useProducts } from "@/hooks/useProducts";
 import { useTables } from "@/hooks/useTables";
 import { useOrders } from "@/hooks/useOrders";
+import { useCurrentShop } from "@/hooks/useCurrentShop";
 import cappuccinoImg from "@/assets/cappuccino.jpg";
 import bubbleTeaImg from "@/assets/bubble-tea.jpg";
 import icedTeaImg from "@/assets/iced-tea.jpg";
@@ -429,7 +430,7 @@ const Index = () => {
                 <span>Bàn {selectedTable.table_number}</span>
               </div>
             )}
-            <span>Cửa hàng: {typeof window !== 'undefined' ? (localStorage.getItem('currentShop') || '—') : '—'}</span>
+            <span>C���a hàng: {useCurrentShop().shopName}</span>
             <span>Hệ thống bán hàng</span>
           </div>
         </div>

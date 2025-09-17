@@ -27,7 +27,7 @@ export const useCurrentShop = () => {
             .eq("id", uid)
             .single();
           const record = data as ShopRecord | null;
-          setShopName(record?.name || uid);
+          setShopName(record?.name ?? "—");
         } else {
           setShopName("—");
         }

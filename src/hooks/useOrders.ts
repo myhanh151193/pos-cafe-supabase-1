@@ -116,10 +116,11 @@ export const useOrders = () => {
 
       return orderData;
     } catch (err) {
-      console.error('Error creating order:', err);
+      const errMsg = err instanceof Error ? err.message : JSON.stringify(err);
+      console.error('Error creating order:', errMsg);
       toast({
         title: "Lỗi tạo đơn hàng",
-        description: "Không thể tạo đơn hàng. Vui lòng thử lại.",
+        description: errMsg || "Không thể tạo đơn hàng. Vui lòng thử lại.",
         variant: "destructive"
       });
       throw err;

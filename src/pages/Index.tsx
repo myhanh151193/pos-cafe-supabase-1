@@ -75,12 +75,12 @@ const Index = () => {
   // Use hooks to fetch data from Supabase
   const { products, categories: dbCategories, loading: productsLoading } = useProducts();
   const { tables, updateTableStatus, updateTableNotes } = useTables();
-  const { createOrder } = useOrders();
+  const { createOrder, orders } = useOrders();
 
   // Get cart items for current table
   const cartItems = selectedTable ? (tableCartItems[selectedTable.id] || []) : [];
 
-  // Categories for filter (add "Tất cả" to database categories)
+  // Categories for filter (add "T��t cả" to database categories)
   const categories = ["Tất cả", ...dbCategories.map(cat => cat.name)];
 
   // Filter products by category and search

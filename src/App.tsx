@@ -8,6 +8,8 @@ import Index from "./pages/Index";
 import Kitchen from "./pages/Kitchen";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/Login";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 

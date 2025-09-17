@@ -21,11 +21,14 @@ export const useCurrentShop = () => {
         setShopId(uid);
         if (uid) {
           // Try to fetch shop record where id equals user id
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from("shop")
             .select("id, name")
             .eq("id", uid)
-            .single();
+            .maybeSingle();
+          if (error) {
+            console.warn("Cannot load shop name:", error.message);
+          }
           const record = data as ShopRecord | null;
           setShopName(record?.name ?? "—");
         } else {

@@ -48,7 +48,8 @@ const Admin = () => {
   const { products, categories, loading: productsLoading } = useProducts();
   const { tables, loading: tablesLoading } = useTables();
   const { orders, loading: ordersLoading } = useOrders();
-  
+  const { shopName } = useCurrentShop();
+
   const { toast } = useToast();
 
   const formatPrice = (price: number) => {

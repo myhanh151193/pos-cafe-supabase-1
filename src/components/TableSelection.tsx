@@ -29,10 +29,9 @@ const getTableStatusColor = (status: string, hasConfirmedOrder: boolean = false)
     case "available":
       return "bg-emerald-100 hover:bg-emerald-200 border-emerald-300 text-emerald-800";
     case "occupied":
-      // If table has confirmed order, make it clickable (not disabled)
-      return hasConfirmedOrder 
+      return hasConfirmedOrder
         ? "bg-orange-100 hover:bg-orange-200 border-orange-300 text-orange-800"
-        : "bg-red-100 border-red-300 text-red-800 cursor-not-allowed opacity-60";
+        : "bg-red-100 border-red-300 text-red-800";
     case "reserved":
       return "bg-yellow-100 border-yellow-300 text-yellow-800 cursor-not-allowed opacity-60";
     default:
@@ -86,7 +85,7 @@ export function TableSelection({ tables, selectedTable, onTableSelect, onConfirm
         {tables.map((table) => {
           const dynamicStatus = getDynamicTableStatus(table);
           const hasConfirmedOrder = !!confirmedOrders[table.id];
-          const isClickable = dynamicStatus === "available" || hasConfirmedOrder;
+          const isClickable = dynamicStatus === "available" || dynamicStatus === "occupied";
           
           return (
           <Card

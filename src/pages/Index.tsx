@@ -76,7 +76,7 @@ const Index = () => {
   // Use hooks to fetch data from Supabase
   const { products, categories: dbCategories, loading: productsLoading } = useProducts();
   const { tables, updateTableStatus, updateTableNotes } = useTables();
-  const { createOrder, orders } = useOrders();
+  const { createOrder, orders, updateOrderStatus } = useOrders();
   const { shopName } = useCurrentShop();
 
   // Totals from backend (unpaid orders) merged with local confirmed totals
@@ -299,7 +299,7 @@ const Index = () => {
         }));
         
         toast({
-          title: "��ã xác nhận đơn hàng!",
+          title: "Đã xác nhận đơn hàng!",
           description: `Bàn ${selectedTable.table_number} - Tổng tiền: ${formatPrice(orderTotal)} - Đã gửi đến bếp`,
         });
       } catch (error) {
@@ -354,6 +354,12 @@ const Index = () => {
 
     try {
       if (selectedTable) {
+        // Mark all open orders for this table as paid
+        const openOrderIds = orders
+          .filter(o => o.table_id === selectedTable.id && o.status !== 'paid' && o.status !== 'cancelled')
+          .map(o => o.id);
+        await Promise.all(openOrderIds.map(id => updateOrderStatus(id, 'paid')));
+        // Then set table back to available
         await updateTableStatus(selectedTable.id, 'available');
       }
     } catch (e) {

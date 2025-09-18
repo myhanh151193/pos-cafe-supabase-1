@@ -243,7 +243,7 @@ export function TableManager({
       <Dialog open={showSwitchDialog} onOpenChange={setShowSwitchDialog}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Chuyển bàn {selectedTable?.number}</DialogTitle>
+            <DialogTitle>Chuyển bàn {selectedTable?.table_number}</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">

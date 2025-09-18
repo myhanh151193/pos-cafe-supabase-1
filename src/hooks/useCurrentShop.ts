@@ -15,25 +15,35 @@ export const useCurrentShop = () => {
     let mounted = true;
     const load = async () => {
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        const uid = userData.user?.id || null;
+        const { data: userData, error } = await supabase.auth.getUser();
+        if (error) {
+          console.warn('Auth getUser error:', error.message);
+        }
+        const uid = userData?.user?.id || null;
         if (!mounted) return;
         setShopId(uid);
         if (uid) {
-          // Try to fetch shop record where id equals user id
-          const { data, error } = await supabase
-            .from("shop")
-            .select("id, name")
-            .eq("id", uid)
-            .maybeSingle();
-          if (error) {
-            console.warn("Cannot load shop name:", error.message);
+          try {
+            const { data, error: shopErr } = await supabase
+              .from("shop")
+              .select("id, name")
+              .eq("id", uid)
+              .maybeSingle();
+            if (shopErr) {
+              console.warn("Cannot load shop name:", shopErr.message);
+            }
+            const record = data as ShopRecord | null;
+            setShopName(record?.name ?? "—");
+          } catch (e) {
+            console.warn('Shop fetch failed:', e);
+            setShopName("—");
           }
-          const record = data as ShopRecord | null;
-          setShopName(record?.name ?? "—");
         } else {
           setShopName("—");
         }
+      } catch (e) {
+        console.warn('Auth getUser failed:', e);
+        if (mounted) setShopName("—");
       } finally {
         if (mounted) setLoading(false);
       }

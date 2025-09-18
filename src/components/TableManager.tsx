@@ -39,15 +39,18 @@ interface TableManagerProps {
   moveOpenOrders?: (fromId: string, toId: string) => Promise<void>;
 }
 
-export function TableManager({ 
-  selectedTable, 
-  tableCartItems, 
-  setTableCartItems, 
-  confirmedOrders, 
-  setConfirmedOrders, 
+export function TableManager({
+  selectedTable,
+  tables,
+  tableCartItems,
+  setTableCartItems,
+  confirmedOrders,
+  setConfirmedOrders,
   formatPrice,
   tableNotes,
-  onTableSwitch
+  onTableSwitch,
+  updateTableStatus,
+  moveOpenOrders
 }: TableManagerProps) {
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);

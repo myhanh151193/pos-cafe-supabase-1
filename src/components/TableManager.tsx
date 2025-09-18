@@ -145,9 +145,9 @@ export function TableManager({
     setSelectedTargetTable(null);
   };
 
-  const handleMergeTable = () => {
+  const handleMergeTable = async () => {
     if (!selectedTable || !selectedTargetTable) return;
-    
+
     const currentTableItems = tableCartItems[selectedTable.id] || [];
     if (currentTableItems.length === 0) {
       toast({
@@ -163,7 +163,6 @@ export function TableManager({
       const newState = { ...prev };
       const targetTableItems = newState[selectedTargetTable.id] || [];
       const mergedItems = [...targetTableItems];
-      
       currentTableItems.forEach(currentItem => {
         const existingIndex = mergedItems.findIndex(item => item.id === currentItem.id);
         if (existingIndex >= 0) {
@@ -172,10 +171,8 @@ export function TableManager({
           mergedItems.push(currentItem);
         }
       });
-      
       newState[selectedTargetTable.id] = mergedItems;
-      delete newState[selectedTable.id]; // Clear source table after merge
-      
+      delete newState[selectedTable.id];
       return newState;
     });
 
@@ -185,19 +182,26 @@ export function TableManager({
         const newState = { ...prev };
         const currentOrder = newState[selectedTable.id] || 0;
         const targetOrder = newState[selectedTargetTable.id] || 0;
-        
         newState[selectedTargetTable.id] = currentOrder + targetOrder;
-        delete newState[selectedTable.id]; // Clear source table order
-        
+        delete newState[selectedTable.id];
         return newState;
       });
     }
 
+    try {
+      if (moveOpenOrders) await moveOpenOrders(selectedTable.id, selectedTargetTable.id);
+      if (updateTableStatus) {
+        await updateTableStatus(selectedTable.id, 'available');
+        await updateTableStatus(selectedTargetTable.id, 'occupied');
+      }
+    } catch (e) {
+      console.error('Error syncing merge table:', e);
+    }
+
     toast({
       title: "Đã gộp bàn thành công!",
-      description: `Gộp bàn ${selectedTable.number} vào bàn ${selectedTargetTable.number}`,
+      description: `Gộp bàn ${selectedTable.table_number} vào bàn ${selectedTargetTable.table_number}`,
     });
-    
     setShowMergeDialog(false);
     setSelectedTargetTable(null);
   };

@@ -48,7 +48,7 @@ import type { Table as TableType } from "@/hooks/useTables";
 const Admin = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const { products, categories, loading: productsLoading, refetch: refetchProducts } = useProducts();
-  const { tables, loading: tablesLoading } = useTables();
+  const { tables, loading: tablesLoading, refetch: refetchTables } = useTables();
   const { orders, loading: ordersLoading } = useOrders();
   const { shopName } = useCurrentShop();
 
@@ -515,10 +515,112 @@ const Admin = () => {
     </div>
   );
 
+  // Tables management state and helpers
+  const [tableSearch, setTableSearch] = useState("");
+  const [tableStatusFilter, setTableStatusFilter] = useState<string>("all");
+  const [tableSeatsMin, setTableSeatsMin] = useState<string>("");
+  const [tablePage, setTablePage] = useState(1);
+  const tablePageSize = 10;
+
+  const filteredTables = tables.filter(t => {
+    const byStatus = tableStatusFilter === 'all' || t.status === tableStatusFilter;
+    const term = tableSearch.toLowerCase().trim();
+    const bySearch =
+      term === "" ||
+      String(t.table_number).includes(term) ||
+      (t.notes || "").toLowerCase().includes(term) ||
+      String(t.seats).includes(term);
+    const bySeats = tableSeatsMin === "" || t.seats >= Number(tableSeatsMin);
+    return byStatus && bySearch && bySeats;
+  });
+  const totalTablePages = Math.max(1, Math.ceil(filteredTables.length / tablePageSize));
+  const pageTables = filteredTables.slice((tablePage - 1) * tablePageSize, tablePage * tablePageSize);
+
+  const exportTablesCSV = () => {
+    const header = ['Số bàn','Số chỗ','Trạng thái','Ghi chú'];
+    const rows = filteredTables.map(t => [
+      String(t.table_number),
+      String(t.seats),
+      getTableStatusInfo(t.status).label,
+      t.notes || ''
+    ]);
+    const csv = [header, ...rows].map(r => r.map(v => `"${(v || '').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tables.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const [openAddTable, setOpenAddTable] = useState(false);
+  const [newTableNumber, setNewTableNumber] = useState<string>("");
+  const [newSeats, setNewSeats] = useState<string>("");
+  const [newTableStatus, setNewTableStatus] = useState<string>("available");
+  const [newTableNotes, setNewTableNotes] = useState("");
+  const [savingTable, setSavingTable] = useState(false);
+
+  const addTable = async () => {
+    try {
+      if (!newTableNumber || !newSeats) {
+        toast({ title: 'Thiếu thông tin', description: 'Vui lòng nhập số bàn và số chỗ', variant: 'destructive' });
+        return;
+      }
+      const tnum = Number(newTableNumber);
+      const seatsNum = Number(newSeats);
+      if (isNaN(tnum) || isNaN(seatsNum) || tnum <= 0 || seatsNum <= 0) {
+        toast({ title: 'Giá trị không hợp lệ', description: 'Số bàn và số chỗ phải là số dương', variant: 'destructive' });
+        return;
+      }
+      if (tables.some(t => t.table_number === tnum)) {
+        toast({ title: 'Trùng số bàn', description: `Bàn số ${tnum} đã tồn tại`, variant: 'destructive' });
+        return;
+      }
+      setSavingTable(true);
+      const { error } = await supabase.from('tables').insert({
+        table_number: tnum,
+        seats: seatsNum,
+        status: newTableStatus,
+        notes: newTableNotes || null
+      });
+      if (error) throw error;
+      setOpenAddTable(false);
+      setNewTableNumber(""); setNewSeats(""); setNewTableStatus("available"); setNewTableNotes("");
+      await refetchTables();
+      toast({ title: 'Đã thêm bàn' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Không thể thêm bàn';
+      toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
+    } finally {
+      setSavingTable(false);
+    }
+  };
+
   const renderTables = () => (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h2 className="text-2xl font-bold">Quản lý bàn</h2>
+        <div className="flex gap-2">
+          <Input placeholder="Tìm số bàn/ghi chú..." value={tableSearch} onChange={(e) => { setTableSearch(e.target.value); setTablePage(1); }} className="h-8 w-48" />
+          <Select value={tableStatusFilter} onValueChange={(v) => { setTableStatusFilter(v); setTablePage(1); }}>
+            <SelectTrigger className="h-8 w-40">
+              <SelectValue placeholder="Trạng thái" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả trạng thái</SelectItem>
+              <SelectItem value="available">Trống</SelectItem>
+              <SelectItem value="occupied">Có khách</SelectItem>
+              <SelectItem value="reserved">Đã đặt</SelectItem>
+              <SelectItem value="cleaning">Dọn dẹp</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input placeholder="Số chỗ tối thiểu" type="number" value={tableSeatsMin} onChange={(e) => { setTableSeatsMin(e.target.value); setTablePage(1); }} className="h-8 w-44" />
+          <Button variant="outline" size="sm" onClick={exportTablesCSV}>Xuất CSV</Button>
+          <Button size="sm" onClick={() => setOpenAddTable(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Thêm bàn
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -530,11 +632,10 @@ const Admin = () => {
                 <TableHead>Số chỗ ngồi</TableHead>
                 <TableHead>Trạng thái</TableHead>
                 <TableHead>Ghi chú</TableHead>
-                
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tables.map((table) => {
+              {pageTables.map((table) => {
                 const statusInfo = getTableStatusInfo(table.status);
                 return (
                   <TableRow key={table.id}>
@@ -545,14 +646,68 @@ const Admin = () => {
                         {statusInfo.label}
                       </Badge>
                     </TableCell>
-                    <TableCell>{table.notes || "-"}</TableCell>
+                    <TableCell className="max-w-xs truncate">{table.notes || "-"}</TableCell>
                   </TableRow>
                 );
               })}
+              {pageTables.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Không có bàn</TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </TableComponent>
         </CardContent>
       </Card>
+
+      <div className="flex items-center justify-between text-sm">
+        <span>Tổng: {filteredTables.length} bàn</span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setTablePage(p => Math.max(1, p-1))} disabled={tablePage<=1}>Trước</Button>
+          <span>Trang {tablePage}/{totalTablePages}</span>
+          <Button variant="outline" size="sm" onClick={() => setTablePage(p => Math.min(totalTablePages, p+1))} disabled={tablePage>=totalTablePages}>Sau</Button>
+        </div>
+      </div>
+
+      <Dialog open={openAddTable} onOpenChange={setOpenAddTable}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Thêm bàn</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Số bàn</Label>
+              <Input type="number" value={newTableNumber} onChange={e=>setNewTableNumber(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Số chỗ ngồi</Label>
+              <Input type="number" value={newSeats} onChange={e=>setNewSeats(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Trạng thái</Label>
+              <Select value={newTableStatus} onValueChange={setNewTableStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn trạng thái" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="available">Trống</SelectItem>
+                  <SelectItem value="occupied">Có khách</SelectItem>
+                  <SelectItem value="reserved">Đã đặt</SelectItem>
+                  <SelectItem value="cleaning">Dọn dẹp</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Ghi chú</Label>
+              <Textarea value={newTableNotes} onChange={e=>setNewTableNotes(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={()=>setOpenAddTable(false)}>Hủy</Button>
+              <Button onClick={addTable} disabled={savingTable}>{savingTable? 'Đang lưu...' : 'Lưu'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 

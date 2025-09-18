@@ -83,9 +83,9 @@ export function TableManager({
     }
   };
 
-  const handleSwitchTable = () => {
+  const handleSwitchTable = async () => {
     if (!selectedTable || !selectedTargetTable) return;
-    
+
     const currentTableItems = tableCartItems[selectedTable.id] || [];
     if (currentTableItems.length === 0) {
       toast({
@@ -99,11 +99,8 @@ export function TableManager({
     // Move items from current table to target table
     setTableCartItems(prev => {
       const newState = { ...prev };
-      
-      // Add current table items to target table
       const targetTableItems = newState[selectedTargetTable.id] || [];
       const mergedItems = [...targetTableItems];
-      
       currentTableItems.forEach(currentItem => {
         const existingIndex = mergedItems.findIndex(item => item.id === currentItem.id);
         if (existingIndex >= 0) {
@@ -112,10 +109,8 @@ export function TableManager({
           mergedItems.push(currentItem);
         }
       });
-      
       newState[selectedTargetTable.id] = mergedItems;
-      delete newState[selectedTable.id]; // Remove from current table
-      
+      delete newState[selectedTable.id];
       return newState;
     });
 
@@ -125,24 +120,27 @@ export function TableManager({
         const newState = { ...prev };
         const currentOrder = newState[selectedTable.id] || 0;
         const targetOrder = newState[selectedTargetTable.id] || 0;
-        
         newState[selectedTargetTable.id] = currentOrder + targetOrder;
         delete newState[selectedTable.id];
-        
         return newState;
       });
     }
 
+    try {
+      if (moveOpenOrders) await moveOpenOrders(selectedTable.id, selectedTargetTable.id);
+      if (updateTableStatus) {
+        await updateTableStatus(selectedTable.id, 'available');
+        await updateTableStatus(selectedTargetTable.id, 'occupied');
+      }
+    } catch (e) {
+      console.error('Error syncing switch table:', e);
+    }
+
     toast({
       title: "Đã chuyển bàn thành công!",
-      description: `Chuyển từ bàn ${selectedTable.number} sang bàn ${selectedTargetTable.number}`,
+      description: `Chuyển từ bàn ${selectedTable.table_number} sang bàn ${selectedTargetTable.table_number}`,
     });
-    
-    // Switch to the new table
-    if (onTableSwitch) {
-      onTableSwitch(selectedTargetTable);
-    }
-    
+    if (onTableSwitch) onTableSwitch(selectedTargetTable);
     setShowSwitchDialog(false);
     setSelectedTargetTable(null);
   };

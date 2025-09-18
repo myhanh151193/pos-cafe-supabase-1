@@ -63,7 +63,7 @@ export function TableManager({
 }: TableManagerProps) {
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
-  const [selectedTargetTable, setSelectedTargetTable] = useState<Table | null>(null);
+  const [selectedTargetTable, setSelectedTargetTable] = useState<DBTable | null>(null);
   const { toast } = useToast();
 
   const getTableStatusColor = (status: string) => {
@@ -271,11 +271,11 @@ export function TableManager({
                 >
                   <CardContent className="p-3 text-center">
                     <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/80 mx-auto mb-2">
-                      <span className="font-bold">{table.number}</span>
+                      <span className="font-bold">{table.table_number}</span>
                     </div>
                     
                     <div className="space-y-1">
-                      <h4 className="font-semibold text-sm">Bàn {table.number}</h4>
+                      <h4 className="font-semibold text-sm">Bàn {table.table_number}</h4>
                       <div className="flex items-center justify-center space-x-1 text-xs">
                         <Users className="w-3 h-3" />
                         <span>{table.seats}</span>
@@ -340,11 +340,11 @@ export function TableManager({
                 >
                   <CardContent className="p-3 text-center">
                     <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/80 mx-auto mb-2">
-                      <span className="font-bold">{table.number}</span>
+                      <span className="font-bold">{table.table_number}</span>
                     </div>
                     
                     <div className="space-y-1">
-                      <h4 className="font-semibold text-sm">Bàn {table.number}</h4>
+                      <h4 className="font-semibold text-sm">Bàn {table.table_number}</h4>
                       <div className="flex items-center justify-center space-x-1 text-xs">
                         <Users className="w-3 h-3" />
                         <span>{table.seats}</span>

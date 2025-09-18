@@ -26,30 +26,18 @@ interface CartItemType {
 }
 
 interface TableManagerProps {
-  selectedTable: Table | null;
+  selectedTable: DBTable | null;
+  tables: DBTable[];
   tableCartItems: {[tableId: string]: CartItemType[]};
   setTableCartItems: React.Dispatch<React.SetStateAction<{[tableId: string]: CartItemType[]}>>;
   confirmedOrders: {[tableId: string]: number};
   setConfirmedOrders: React.Dispatch<React.SetStateAction<{[tableId: string]: number}>>;
   formatPrice: (price: number) => string;
   tableNotes: {[tableId: string]: string};
-  onTableSwitch?: (newTable: Table) => void;
+  onTableSwitch?: (newTable: DBTable) => void;
+  updateTableStatus?: (tableId: string, status: DBTable['status']) => Promise<void>;
+  moveOpenOrders?: (fromId: string, toId: string) => Promise<void>;
 }
-
-const tables: Table[] = [
-  { id: "t1", number: 1, seats: 2, status: "available" },
-  { id: "t2", number: 2, seats: 4, status: "available" },
-  { id: "t3", number: 3, seats: 2, status: "occupied", notes: "Khách VIP - Đang dùng bữa" },
-  { id: "t4", number: 4, seats: 6, status: "available" },
-  { id: "t5", number: 5, seats: 4, status: "reserved", notes: "Đặt bàn 19:00 - Gia đình Nguyễn" },
-  { id: "t6", number: 6, seats: 8, status: "available" },
-  { id: "t7", number: 7, seats: 2, status: "available" },
-  { id: "t8", number: 8, seats: 4, status: "available" },
-  { id: "t9", number: 9, seats: 6, status: "available" },
-  { id: "t10", number: 10, seats: 2, status: "occupied" },
-  { id: "t11", number: 11, seats: 4, status: "available" },
-  { id: "t12", number: 12, seats: 8, status: "available" },
-];
 
 export function TableManager({ 
   selectedTable, 

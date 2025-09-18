@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Table as TableComponent, 
   TableBody, 
@@ -14,6 +15,7 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { 
@@ -45,7 +47,7 @@ import type { Table as TableType } from "@/hooks/useTables";
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState("overview");
-  const { products, categories, loading: productsLoading } = useProducts();
+  const { products, categories, loading: productsLoading, refetch: refetchProducts } = useProducts();
   const { tables, loading: tablesLoading } = useTables();
   const { orders, loading: ordersLoading } = useOrders();
   const { shopName } = useCurrentShop();
@@ -279,42 +281,179 @@ const Admin = () => {
     </div>
   );
 
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  const filteredProducts = products.filter(p => {
+    const byName = p.name.toLowerCase().includes(search.toLowerCase());
+    const byCat = categoryFilter === 'all' || p.category_id === categoryFilter;
+    return byName && byCat;
+  });
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const pageProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
+
+  const exportCSV = () => {
+    const header = ['Tên', 'Danh mục', 'Giá', 'Mô tả', 'Trạng thái'];
+    const rows = filteredProducts.map(p => [
+      p.name,
+      p.category?.name || '',
+      String(p.price),
+      p.description || '',
+      p.is_available ? 'Có sẵn' : 'Hết hàng',
+    ]);
+    const csv = [header, ...rows].map(r => r.map(v => `"${(v || '').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'products.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const [openAdd, setOpenAdd] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPrice, setNewPrice] = useState<string>("");
+  const [newCategoryId, setNewCategoryId] = useState<string>("");
+  const [newDesc, setNewDesc] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const addProduct = async () => {
+    try {
+      if (!newName || !newPrice || !newCategoryId) {
+        toast({ title: 'Thiếu thông tin', description: 'Vui lòng nhập tên, giá và danh mục', variant: 'destructive' });
+        return;
+      }
+      setSaving(true);
+      const { error } = await supabase.from('products').insert({
+        name: newName,
+        price: Number(newPrice),
+        category_id: newCategoryId,
+        description: newDesc || null,
+        is_available: true,
+      });
+      if (error) throw error;
+      setOpenAdd(false);
+      setNewName(""); setNewPrice(""); setNewCategoryId(""); setNewDesc("");
+      await refetchProducts();
+      toast({ title: 'Đã thêm sản phẩm' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Không thể thêm sản phẩm';
+      toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const renderProducts = () => (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h2 className="text-2xl font-bold">Danh sách sản phẩm</h2>
+        <div className="flex gap-2">
+          <Input placeholder="Tìm theo tên..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="h-8 w-48" />
+          <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}>
+            <SelectTrigger className="h-8 w-48">
+              <SelectValue placeholder="Danh mục" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả danh mục</SelectItem>
+              {categories.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={exportCSV}>Xuất CSV</Button>
+          <Button size="sm" onClick={() => setOpenAdd(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Thêm sản phẩm
+          </Button>
+        </div>
       </div>
 
-        <Card>
-          <CardContent className="p-0">
-            <TableComponent>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tên sản phẩm</TableHead>
-                  <TableHead>Danh mục</TableHead>
-                  <TableHead>Giá bán</TableHead>
-                  <TableHead>Mô tả</TableHead>
-                  <TableHead>Trạng thái</TableHead>
+      <Card>
+        <CardContent className="p-0">
+          <TableComponent>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tên sản phẩm</TableHead>
+                <TableHead>Danh mục</TableHead>
+                <TableHead>Giá bán</TableHead>
+                <TableHead className="hidden md:table-cell">Mô tả</TableHead>
+                <TableHead>Trạng thái</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pageProducts.map((product) => (
+                <TableRow key={product.id}>
+                  <TableCell className="font-medium">{product.name}</TableCell>
+                  <TableCell>{product.category?.name}</TableCell>
+                  <TableCell>{formatPrice(product.price)}</TableCell>
+                  <TableCell className="max-w-xs truncate hidden md:table-cell">{product.description}</TableCell>
+                  <TableCell>
+                    <Badge variant={product.is_available ? 'default' : 'outline'}>
+                      {product.is_available ? 'Có sẵn' : 'Hết hàng'}
+                    </Badge>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {products.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell>{product.category?.name}</TableCell>
-                    <TableCell>{formatPrice(product.price)}</TableCell>
-                    <TableCell className="max-w-xs truncate">{product.description}</TableCell>
-                    <TableCell>
-                      <Badge variant={product.is_available ? "default" : "outline"}>
-                        {product.is_available ? "Có sẵn" : "Hết hàng"}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </TableComponent>
-          </CardContent>
-        </Card>
+              ))}
+              {pageProducts.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Không có sản phẩm</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </TableComponent>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center justify-between text-sm">
+        <span>Tổng: {filteredProducts.length} sản phẩm</span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p-1))} disabled={page<=1}>Trước</Button>
+          <span>Trang {page}/{totalPages}</span>
+          <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page>=totalPages}>Sau</Button>
+        </div>
+      </div>
+
+      <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Thêm sản phẩm</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Tên</Label>
+              <Input value={newName} onChange={e=>setNewName(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Giá</Label>
+              <Input type="number" value={newPrice} onChange={e=>setNewPrice(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Danh mục</Label>
+              <Select value={newCategoryId} onValueChange={setNewCategoryId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn danh mục" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Mô tả</Label>
+              <Textarea value={newDesc} onChange={e=>setNewDesc(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={()=>setOpenAdd(false)}>Hủy</Button>
+              <Button onClick={addProduct} disabled={saving}>{saving? 'Đang lưu...' : 'Lưu'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 

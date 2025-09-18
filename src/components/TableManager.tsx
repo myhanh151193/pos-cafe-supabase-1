@@ -312,7 +312,7 @@ export function TableManager({
       <Dialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Gộp bàn {selectedTable?.number}</DialogTitle>
+            <DialogTitle>Gộp bàn {selectedTable?.table_number}</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">

@@ -309,31 +309,44 @@ const Index = () => {
     }
   };
 
-  const handleDeleteOrder = () => {
-    if (!selectedTable || cartItems.length === 0) {
+  const handleDeleteOrder = async () => {
+    if (!selectedTable) {
       toast({
-        title: "Giỏ hàng trống",
-        description: "Không có đơn hàng để xóa",
+        title: "Chưa chọn bàn",
+        description: "Vui lòng chọn bàn trước khi x��a",
         variant: "destructive"
       });
       return;
     }
 
+    // Clear local cart for this table
     setTableCartItems(prev => ({
       ...prev,
       [selectedTable.id]: []
     }));
-    
-    // Also remove confirmed order status for this table
+
+    // Remove local confirmed total
     setConfirmedOrders(prev => {
       const updated = { ...prev };
       delete updated[selectedTable.id];
       return updated;
     });
-    
+
+    try {
+      // Cancel any open backend orders for this table
+      const openOrderIds = orders
+        .filter(o => o.table_id === selectedTable.id && o.status !== 'paid' && o.status !== 'cancelled')
+        .map(o => o.id);
+      await Promise.all(openOrderIds.map(id => updateOrderStatus(id, 'cancelled')));
+      // Free the table
+      await updateTableStatus(selectedTable.id, 'available');
+    } catch (e) {
+      console.error('Error cancelling orders/resetting table:', e);
+    }
+
     toast({
       title: "Đã xóa đơn hàng",
-      description: "Giỏ hàng đã được làm trống",
+      description: "Bàn đã được đặt về trạng thái Trống",
     });
   };
 

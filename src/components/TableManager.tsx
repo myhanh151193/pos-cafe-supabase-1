@@ -6,12 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowRightLeft, Merge, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface Table {
+interface DBTable {
   id: string;
-  number: number;
+  table_number: number;
   seats: number;
-  status: "available" | "occupied" | "reserved";
-  notes?: string;
+  status: "available" | "occupied" | "reserved" | "cleaning";
+  notes?: string | null;
 }
 
 interface CartItemType {

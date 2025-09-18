@@ -76,7 +76,7 @@ const Index = () => {
   // Use hooks to fetch data from Supabase
   const { products, categories: dbCategories, loading: productsLoading } = useProducts();
   const { tables, updateTableStatus, updateTableNotes } = useTables();
-  const { createOrder, orders, updateOrderStatus } = useOrders();
+  const { createOrder, orders, updateOrderStatus, moveOpenOrders } = useOrders();
   const { shopName } = useCurrentShop();
 
   // Totals from backend (unpaid orders) merged with local confirmed totals
@@ -267,7 +267,7 @@ const Index = () => {
   const handleConfirmOrder = async () => {
     if (cartItems.length === 0) {
       toast({
-        title: "Giỏ hàng trống",
+        title: "Giỏ h��ng trống",
         description: "Vui lòng thêm sản phẩm vào giỏ hàng trước khi xác nhận",
         variant: "destructive"
       });
@@ -313,7 +313,7 @@ const Index = () => {
     if (!selectedTable) {
       toast({
         title: "Chưa chọn bàn",
-        description: "Vui lòng chọn bàn trước khi x��a",
+        description: "Vui lòng chọn bàn trước khi xóa",
         variant: "destructive"
       });
       return;
@@ -614,6 +614,7 @@ const Index = () => {
 
                           <TableManager
                             selectedTable={selectedTable}
+                            tables={tables}
                             tableCartItems={tableCartItems}
                             setTableCartItems={setTableCartItems}
                             confirmedOrders={confirmedOrders}
@@ -621,6 +622,8 @@ const Index = () => {
                             formatPrice={formatPrice}
                             tableNotes={{}}
                             onTableSwitch={setSelectedTable}
+                            updateTableStatus={updateTableStatus}
+                            moveOpenOrders={moveOpenOrders}
                           />
 
                           <Button

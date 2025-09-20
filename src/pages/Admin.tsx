@@ -50,7 +50,7 @@ const Admin = () => {
   const { products, categories, loading: productsLoading, refetch: refetchProducts } = useProducts();
   const { tables, loading: tablesLoading, refetch: refetchTables } = useTables();
   const { orders, loading: ordersLoading } = useOrders();
-  const { shopName } = useCurrentShop();
+  const { shopName, shopId } = useCurrentShop();
 
   const { toast } = useToast();
 
@@ -711,6 +711,291 @@ const Admin = () => {
     }
   };
 
+  // Employees management
+  type Employee = {
+    id: string;
+    name: string;
+    email: string;
+    role: 'admin' | 'manager' | 'staff';
+    phone?: string | null;
+    is_active?: boolean | null;
+    created_at?: string;
+    updated_at?: string;
+  };
+
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState<boolean>(true);
+  const [empSearch, setEmpSearch] = useState("");
+  const [empRoleFilter, setEmpRoleFilter] = useState<string>('all');
+
+  const fetchEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setEmployees((data as Employee[]) || []);
+    } catch (e) {
+      console.warn('Load employees failed:', e);
+      toast({ title: 'Lỗi', description: 'Không thể tải danh sách nhân viên', variant: 'destructive' });
+    } finally {
+      setEmployeesLoading(false);
+    }
+  };
+
+  React.useEffect(() => { fetchEmployees(); }, []);
+
+  const filteredEmployees = employees.filter(e => {
+    const term = empSearch.toLowerCase().trim();
+    const bySearch = term === '' || e.name.toLowerCase().includes(term) || e.email.toLowerCase().includes(term) || (e.phone||'').includes(term);
+    const byRole = empRoleFilter === 'all' || e.role === empRoleFilter;
+    return bySearch && byRole;
+  });
+
+  const roleBadge = (role: Employee['role']) => {
+    const map: Record<Employee['role'], { label: string; variant: 'default'|'secondary'|'destructive'|'outline' }> = {
+      admin: { label: 'Quản trị', variant: 'destructive' },
+      manager: { label: 'Quản lý', variant: 'secondary' },
+      staff: { label: 'Nhân viên', variant: 'default' },
+    };
+    const r = map[role];
+    return <Badge variant={r.variant}>{r.label}</Badge>;
+  };
+
+  const [openAddEmp, setOpenAddEmp] = useState(false);
+  const [empName, setEmpName] = useState("");
+  const [empEmail, setEmpEmail] = useState("");
+  const [empPhone, setEmpPhone] = useState("");
+  const [empRole, setEmpRole] = useState<Employee['role']>('staff');
+  const [savingEmp, setSavingEmp] = useState(false);
+
+  const inviteAccount = async (email: string, role: Employee['role']) => {
+    try {
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { data: { role } });
+      if (error) throw error;
+      toast({ title: 'Đã gửi lời mời tạo tài khoản' });
+    } catch (e) {
+      console.warn('Invite failed:', e);
+      toast({ title: 'Không thể tạo tài khoản', description: 'Cần cấu hình Service Role (Edge Function) hoặc MCP Supabase', variant: 'destructive' });
+    }
+  };
+
+  const addEmployee = async () => {
+    try {
+      if (!empName || !empEmail) {
+        toast({ title: 'Thiếu thông tin', description: 'Vui lòng nhập tên và email', variant: 'destructive' });
+        return;
+      }
+      setSavingEmp(true);
+      const payload: any = { name: empName, email: empEmail, role: empRole, phone: empPhone || null, is_active: true };
+      if (shopId) payload.shop_id = shopId;
+      const { error } = await supabase.from('employees').insert(payload);
+      if (error) throw error;
+      setOpenAddEmp(false);
+      setEmpName(""); setEmpEmail(""); setEmpPhone(""); setEmpRole('staff');
+      await fetchEmployees();
+      toast({ title: 'Đã thêm nhân viên' });
+      await inviteAccount(payload.email, payload.role);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Không thể thêm nhân viên';
+      toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
+    } finally {
+      setSavingEmp(false);
+    }
+  };
+
+  const [openEditEmp, setOpenEditEmp] = useState(false);
+  const [editEmp, setEditEmp] = useState<Employee | null>(null);
+  const [savingEditEmp, setSavingEditEmp] = useState(false);
+
+  const startEditEmp = (e: Employee) => { setEditEmp(e); setOpenEditEmp(true); };
+
+  const updateEmployee = async () => {
+    if (!editEmp) return;
+    try {
+      setSavingEditEmp(true);
+      const { error } = await supabase.from('employees').update({
+        name: editEmp.name,
+        role: editEmp.role,
+        phone: editEmp.phone ?? null,
+        is_active: editEmp.is_active ?? true,
+        updated_at: new Date().toISOString(),
+      }).eq('id', editEmp.id);
+      if (error) throw error;
+      setOpenEditEmp(false);
+      await fetchEmployees();
+      toast({ title: 'Đã cập nhật nhân viên' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Không thể cập nhật nhân viên';
+      toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
+    } finally {
+      setSavingEditEmp(false);
+    }
+  };
+
+  const deleteEmployee = async (id: string) => {
+    try {
+      const ok = window.confirm('Xóa nhân viên này?');
+      if (!ok) return;
+      const { error } = await supabase.from('employees').delete().eq('id', id);
+      if (error) throw error;
+      await fetchEmployees();
+      toast({ title: 'Đã xóa nhân viên' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Không thể xóa nhân viên';
+      toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
+    }
+  };
+
+  const renderEmployees = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <h2 className="text-2xl font-bold">Danh sách nhân viên</h2>
+        <div className="flex gap-2">
+          <Input placeholder="Tìm tên/email/sđt..." value={empSearch} onChange={(e)=>setEmpSearch(e.target.value)} className="h-8 w-56" />
+          <Select value={empRoleFilter} onValueChange={setEmpRoleFilter}>
+            <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Vai trò" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả vai trò</SelectItem>
+              <SelectItem value="admin">Quản trị</SelectItem>
+              <SelectItem value="manager">Quản lý</SelectItem>
+              <SelectItem value="staff">Nhân viên</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={()=>setOpenAddEmp(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Thêm nhân viên
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <TableComponent>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tên</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Số điện thoại</TableHead>
+                <TableHead>Vai trò</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead>Hành động</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredEmployees.map(e => (
+                <TableRow key={e.id}>
+                  <TableCell className="font-medium">{e.name}</TableCell>
+                  <TableCell>{e.email}</TableCell>
+                  <TableCell>{e.phone || '-'}</TableCell>
+                  <TableCell>{roleBadge(e.role)}</TableCell>
+                  <TableCell>
+                    <Badge variant={(e.is_active ?? true) ? 'default' : 'outline'}>{(e.is_active ?? true) ? 'Đang hoạt động' : 'Ngưng'}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => startEditEmp(e)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => deleteEmployee(e.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {filteredEmployees.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Không có nhân viên</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </TableComponent>
+        </CardContent>
+      </Card>
+
+      <Dialog open={openAddEmp} onOpenChange={setOpenAddEmp}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Thêm nhân viên</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Họ tên</Label>
+              <Input value={empName} onChange={e=>setEmpName(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Email</Label>
+              <Input type="email" value={empEmail} onChange={e=>setEmpEmail(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Số điện thoại</Label>
+              <Input value={empPhone} onChange={e=>setEmpPhone(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Vai trò</Label>
+              <Select value={empRole} onValueChange={(v)=>setEmpRole(v as Employee['role'])}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn vai trò" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="staff">Nhân viên</SelectItem>
+                  <SelectItem value="manager">Quản lý</SelectItem>
+                  <SelectItem value="admin">Quản trị</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={()=>setOpenAddEmp(false)}>Hủy</Button>
+              <Button onClick={addEmployee} disabled={savingEmp}>{savingEmp? 'Đang lưu...' : 'Lưu & Mời tạo tài khoản'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openEditEmp} onOpenChange={setOpenEditEmp}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa nhân viên</DialogTitle>
+          </DialogHeader>
+          {editEmp && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>Họ tên</Label>
+                <Input value={editEmp.name} onChange={e=>setEditEmp({...editEmp, name: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <Label>Số điện thoại</Label>
+                <Input value={editEmp.phone || ''} onChange={e=>setEditEmp({...editEmp, phone: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <Label>Vai trò</Label>
+                <Select value={editEmp.role} onValueChange={(v)=>setEditEmp({...editEmp, role: v as Employee['role']})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn vai trò" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="staff">Nhân viên</SelectItem>
+                    <SelectItem value="manager">Quản lý</SelectItem>
+                    <SelectItem value="admin">Quản trị</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <input id="active" type="checkbox" checked={editEmp.is_active ?? true} onChange={(e)=>setEditEmp({...editEmp, is_active: e.target.checked})} className="h-4 w-4" />
+                <Label htmlFor="active">Đang hoạt động</Label>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={()=>setOpenEditEmp(false)}>Hủy</Button>
+                <Button onClick={updateEmployee} disabled={savingEditEmp}>{savingEditEmp? 'Đang lưu...' : 'Lưu'}</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
   const renderTables = () => (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -837,6 +1122,8 @@ const Admin = () => {
         return renderInventory();
       case "tables":
         return renderTables();
+      case "employees":
+        return renderEmployees();
       default:
         return renderOverview();
     }
@@ -859,6 +1146,7 @@ const Admin = () => {
                   {activeTab === "products" && "Quản lý sản phẩm"}
                   {activeTab === "inventory" && "Quản lý tồn kho"}
                   {activeTab === "tables" && "Quản lý bàn"}
+                  {activeTab === "employees" && "Quản lý nhân viên"}
                 </h1>
               </div>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground">

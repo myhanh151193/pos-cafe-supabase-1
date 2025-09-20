@@ -75,9 +75,9 @@ const Index = () => {
   
   // Use hooks to fetch data from Supabase
   const { products, categories: dbCategories, loading: productsLoading } = useProducts();
-  const { tables, updateTableStatus, updateTableNotes } = useTables();
+  const { shopName, shopId } = useCurrentShop();
+  const { tables, updateTableStatus, updateTableNotes } = useTables(shopId);
   const { createOrder, orders, updateOrderStatus, moveOpenOrders } = useOrders();
-  const { shopName } = useCurrentShop();
 
   // Totals from backend (unpaid orders) merged with local confirmed totals
   const backendOpenTotals = React.useMemo(() => {

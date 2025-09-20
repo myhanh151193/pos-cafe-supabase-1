@@ -25,7 +25,7 @@ export const useCurrentShop = () => {
         if (uid) {
           try {
             const { data, error: shopErr } = await supabase
-              .from("shop")
+              .from("user_shops")
               .select("id, name")
               .eq("id", uid)
               .maybeSingle();

@@ -320,6 +320,15 @@ const Admin = () => {
   const [newDesc, setNewDesc] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editId, setEditId] = useState<string>("");
+  const [editName, setEditName] = useState("");
+  const [editPrice, setEditPrice] = useState<string>("");
+  const [editCategoryId, setEditCategoryId] = useState<string>("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editAvailable, setEditAvailable] = useState<boolean>(true);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const addProduct = async () => {
     try {
       if (!newName || !newPrice || !newCategoryId) {
@@ -344,6 +353,57 @@ const Admin = () => {
       toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const startEdit = (p: Product) => {
+    setEditId(p.id);
+    setEditName(p.name);
+    setEditPrice(String(p.price));
+    setEditCategoryId(p.category_id);
+    setEditDesc(p.description || "");
+    setEditAvailable(!!p.is_available);
+    setOpenEdit(true);
+  };
+
+  const updateProduct = async () => {
+    try {
+      if (!editId || !editName || !editPrice || !editCategoryId) {
+        toast({ title: 'Thiếu thông tin', description: 'Vui lòng nhập tên, giá và danh mục', variant: 'destructive' });
+        return;
+      }
+      setSavingEdit(true);
+      const { error } = await supabase.from('products').update({
+        name: editName,
+        price: Number(editPrice),
+        category_id: editCategoryId,
+        description: editDesc || null,
+        is_available: editAvailable,
+        updated_at: new Date().toISOString(),
+      }).eq('id', editId);
+      if (error) throw error;
+      setOpenEdit(false);
+      await refetchProducts();
+      toast({ title: 'Đã cập nhật sản phẩm' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Không thể cập nhật sản phẩm';
+      toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteProduct = async (id: string) => {
+    try {
+      const ok = window.confirm('Xóa sản phẩm này?');
+      if (!ok) return;
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) throw error;
+      await refetchProducts();
+      toast({ title: 'Đã xóa sản phẩm' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Không thể xóa sản phẩm';
+      toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
     }
   };
 
@@ -381,6 +441,7 @@ const Admin = () => {
                 <TableHead>Giá bán</TableHead>
                 <TableHead className="hidden md:table-cell">Mô tả</TableHead>
                 <TableHead>Trạng thái</TableHead>
+                <TableHead>Hành động</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -395,11 +456,21 @@ const Admin = () => {
                       {product.is_available ? 'Có sẵn' : 'Hết hàng'}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => startEdit(product)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => deleteProduct(product.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
               {pageProducts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Không có sản phẩm</TableCell>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Không có sản phẩm</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -450,6 +521,49 @@ const Admin = () => {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={()=>setOpenAdd(false)}>Hủy</Button>
               <Button onClick={addProduct} disabled={saving}>{saving? 'Đang lưu...' : 'Lưu'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa sản phẩm</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Tên</Label>
+              <Input value={editName} onChange={e=>setEditName(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Giá</Label>
+              <Input type="number" value={editPrice} onChange={e=>setEditPrice(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Danh mục</Label>
+              <Select value={editCategoryId} onValueChange={setEditCategoryId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn danh mục" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Mô tả</Label>
+              <Textarea value={editDesc} onChange={e=>setEditDesc(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-2">
+              <input id="avail" type="checkbox" checked={editAvailable} onChange={(e)=>setEditAvailable(e.target.checked)} className="h-4 w-4" />
+              <Label htmlFor="avail">Có sẵn</Label>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={()=>setOpenEdit(false)}>Hủy</Button>
+              <Button onClick={updateProduct} disabled={savingEdit}>{savingEdit? 'Đang lưu...' : 'Lưu'}</Button>
             </div>
           </div>
         </DialogContent>

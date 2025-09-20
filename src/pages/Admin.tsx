@@ -684,7 +684,7 @@ const Admin = () => {
       const tnum = Number(newTableNumber);
       const seatsNum = Number(newSeats);
       if (isNaN(tnum) || isNaN(seatsNum) || tnum <= 0 || seatsNum <= 0) {
-        toast({ title: 'Giá trị không h��p lệ', description: 'Số bàn và số chỗ phải là số dương', variant: 'destructive' });
+        toast({ title: 'Giá trị không hợp lệ', description: 'Số bàn và số chỗ phải là số dương', variant: 'destructive' });
         return;
       }
       if (tables.some(t => t.table_number === tnum)) {
@@ -731,14 +731,16 @@ const Admin = () => {
 
   const fetchEmployees = async () => {
     try {
-      let query = supabase.from('user_shops').select('*').order('created_at', { ascending: false });
-      if (shopId) query = query.eq('shop_id', shopId);
-      const { data, error } = await query;
+      const { data, error } = await supabase
+        .from('user_shops')
+        .select('*')
+        .order('name', { ascending: true });
       if (error) throw error;
       setEmployees((data as Employee[]) || []);
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Load employees failed:', e);
-      toast({ title: 'Lỗi', description: 'Không thể tải danh sách nhân viên', variant: 'destructive' });
+      const msg = e?.message || e?.error?.message || 'Không thể tải danh sách nhân viên';
+      toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
     } finally {
       setEmployeesLoading(false);
     }
@@ -799,7 +801,6 @@ const Admin = () => {
       }
       setSavingEmp(true);
       const payload: any = { name: empName, email: empEmail, role: empRole, phone: empPhone || null, is_active: true };
-      if (shopId) payload.shop_id = shopId;
       const { error } = await supabase.from('user_shops').insert(payload);
       if (error) throw error;
       setOpenAddEmp(false);
@@ -807,8 +808,8 @@ const Admin = () => {
       await fetchEmployees();
       toast({ title: 'Đã thêm nhân viên' });
       await createEmployeeAccount(payload.email, empPassword, payload.role);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Không thể thêm nhân viên';
+    } catch (e: any) {
+      const msg = e?.message || e?.error?.message || 'Không thể thêm nhân viên';
       toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
     } finally {
       setSavingEmp(false);
@@ -836,8 +837,8 @@ const Admin = () => {
       setOpenEditEmp(false);
       await fetchEmployees();
       toast({ title: 'Đã cập nhật nhân viên' });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Không thể cập nhật nhân viên';
+    } catch (e: any) {
+      const msg = e?.message || e?.error?.message || 'Không thể cập nhật nhân viên';
       toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
     } finally {
       setSavingEditEmp(false);
@@ -852,8 +853,8 @@ const Admin = () => {
       if (error) throw error;
       await fetchEmployees();
       toast({ title: 'Đã xóa nhân viên' });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Không thể xóa nhân viên';
+    } catch (e: any) {
+      const msg = e?.message || e?.error?.message || 'Không thể xóa nhân viên';
       toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
     }
   };

@@ -766,25 +766,35 @@ const Admin = () => {
   const [openAddEmp, setOpenAddEmp] = useState(false);
   const [empName, setEmpName] = useState("");
   const [empEmail, setEmpEmail] = useState("");
+  const [empPassword, setEmpPassword] = useState("");
   const [empPhone, setEmpPhone] = useState("");
   const [empRole, setEmpRole] = useState<Employee['role']>('staff');
   const [savingEmp, setSavingEmp] = useState(false);
 
-  const inviteAccount = async (email: string, role: Employee['role']) => {
+  const createEmployeeAccount = async (email: string, password: string, role: Employee['role']) => {
     try {
-      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { data: { role } });
+      const { error } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { role },
+      });
       if (error) throw error;
-      toast({ title: 'Đã gửi lời mời tạo tài khoản' });
+      toast({ title: 'Đã tạo tài khoản nhân viên' });
     } catch (e) {
-      console.warn('Invite failed:', e);
-      toast({ title: 'Không thể tạo tài khoản', description: 'Cần cấu hình Service Role (Edge Function) hoặc MCP Supabase', variant: 'destructive' });
+      console.warn('Create user failed:', e);
+      toast({ title: 'Không thể tạo tài khoản tại client', description: 'Hãy [Open MCP popover](#open-mcp-popover) và Connect to Supabase để cấp quyền Admin hoặc dùng Edge Function.', variant: 'destructive' });
     }
   };
 
   const addEmployee = async () => {
     try {
-      if (!empName || !empEmail) {
-        toast({ title: 'Thiếu thông tin', description: 'Vui lòng nhập tên và email', variant: 'destructive' });
+      if (!empName || !empEmail || !empPassword) {
+        toast({ title: 'Thiếu thông tin', description: 'Vui lòng nhập tên, email và mật khẩu', variant: 'destructive' });
+        return;
+      }
+      if (empPassword.length < 6) {
+        toast({ title: 'Mật khẩu quá ngắn', description: 'Mật khẩu tối thiểu 6 ký tự', variant: 'destructive' });
         return;
       }
       setSavingEmp(true);
@@ -793,10 +803,10 @@ const Admin = () => {
       const { error } = await supabase.from('employees').insert(payload);
       if (error) throw error;
       setOpenAddEmp(false);
-      setEmpName(""); setEmpEmail(""); setEmpPhone(""); setEmpRole('staff');
+      setEmpName(""); setEmpEmail(""); setEmpPassword(""); setEmpPhone(""); setEmpRole('staff');
       await fetchEmployees();
       toast({ title: 'Đã thêm nhân viên' });
-      await inviteAccount(payload.email, payload.role);
+      await createEmployeeAccount(payload.email, empPassword, payload.role);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Không thể thêm nhân viên';
       toast({ title: 'Lỗi', description: msg, variant: 'destructive' });
@@ -929,6 +939,10 @@ const Admin = () => {
               <Input type="email" value={empEmail} onChange={e=>setEmpEmail(e.target.value)} />
             </div>
             <div className="space-y-1">
+              <Label>Mật khẩu</Label>
+              <Input type="password" value={empPassword} onChange={e=>setEmpPassword(e.target.value)} />
+            </div>
+            <div className="space-y-1">
               <Label>Số điện thoại</Label>
               <Input value={empPhone} onChange={e=>setEmpPhone(e.target.value)} />
             </div>
@@ -947,7 +961,7 @@ const Admin = () => {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={()=>setOpenAddEmp(false)}>Hủy</Button>
-              <Button onClick={addEmployee} disabled={savingEmp}>{savingEmp? 'Đang lưu...' : 'Lưu & Mời tạo tài khoản'}</Button>
+              <Button onClick={addEmployee} disabled={savingEmp}>{savingEmp? 'Đang lưu...' : 'Lưu & Tạo tài khoản'}</Button>
             </div>
           </div>
         </DialogContent>

@@ -48,9 +48,9 @@ import type { Table as TableType } from "@/hooks/useTables";
 const Admin = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const { products, categories, loading: productsLoading, refetch: refetchProducts } = useProducts();
-  const { tables, loading: tablesLoading, refetch: refetchTables } = useTables();
-  const { orders, loading: ordersLoading } = useOrders();
   const { shopName, shopId } = useCurrentShop();
+  const { tables, loading: tablesLoading, refetch: refetchTables } = useTables(shopId);
+  const { orders, loading: ordersLoading } = useOrders();
 
   const { toast } = useToast();
 

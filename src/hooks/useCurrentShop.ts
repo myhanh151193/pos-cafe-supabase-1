@@ -15,34 +15,36 @@ export const useCurrentShop = () => {
     let mounted = true;
     const load = async () => {
       try {
-        const { data: userData, error } = await supabase.auth.getUser();
-        if (error) {
-          console.warn('Auth getUser error:', error.message);
+        const { data: sessionData, error: sessErr } = await supabase.auth.getSession();
+        if (sessErr) console.warn('Auth getSession error:', sessErr.message);
+        const session = sessionData?.session || null;
+        if (!session) {
+          if (mounted) {
+            setShopId(null);
+            setShopName('—');
+          }
+          return;
         }
-        const uid = userData?.user?.id || null;
+        const uid = session.user.id;
         if (!mounted) return;
         setShopId(uid);
-        if (uid) {
-          try {
-            const { data, error: shopErr } = await supabase
-              .from("user_shops")
-              .select("id, name")
-              .eq("id", uid)
-              .maybeSingle();
-            if (shopErr) {
-              console.warn("Cannot load shop name:", shopErr.message);
-            }
-            const record = data as ShopRecord | null;
-            setShopName(record?.name ?? "—");
-          } catch (e) {
-            console.warn('Shop fetch failed:', e);
-            setShopName("—");
+        try {
+          const { data, error: shopErr } = await supabase
+            .from("user_shops")
+            .select("id, name")
+            .eq("id", uid)
+            .maybeSingle();
+          if (shopErr) {
+            console.warn("Cannot load shop name:", shopErr.message);
           }
-        } else {
+          const record = data as ShopRecord | null;
+          setShopName(record?.name ?? "—");
+        } catch (e) {
+          console.warn('Shop fetch failed:', e);
           setShopName("—");
         }
       } catch (e) {
-        console.warn('Auth getUser failed:', e);
+        console.warn('Auth session check failed:', e);
         if (mounted) setShopName("—");
       } finally {
         if (mounted) setLoading(false);

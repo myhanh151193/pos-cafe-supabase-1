@@ -684,7 +684,7 @@ const Admin = () => {
       const tnum = Number(newTableNumber);
       const seatsNum = Number(newSeats);
       if (isNaN(tnum) || isNaN(seatsNum) || tnum <= 0 || seatsNum <= 0) {
-        toast({ title: 'Giá trị không hợp lệ', description: 'Số bàn và số chỗ phải là số dương', variant: 'destructive' });
+        toast({ title: 'Giá trị không h��p lệ', description: 'Số bàn và số chỗ phải là số dương', variant: 'destructive' });
         return;
       }
       if (tables.some(t => t.table_number === tnum)) {
@@ -719,6 +719,7 @@ const Admin = () => {
     role: 'admin' | 'manager' | 'staff';
     phone?: string | null;
     is_active?: boolean | null;
+    shop_id?: string | null;
     created_at?: string;
     updated_at?: string;
   };
@@ -730,10 +731,9 @@ const Admin = () => {
 
   const fetchEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let query = supabase.from('user_shops').select('*').order('created_at', { ascending: false });
+      if (shopId) query = query.eq('shop_id', shopId);
+      const { data, error } = await query;
       if (error) throw error;
       setEmployees((data as Employee[]) || []);
     } catch (e) {
@@ -800,7 +800,7 @@ const Admin = () => {
       setSavingEmp(true);
       const payload: any = { name: empName, email: empEmail, role: empRole, phone: empPhone || null, is_active: true };
       if (shopId) payload.shop_id = shopId;
-      const { error } = await supabase.from('employees').insert(payload);
+      const { error } = await supabase.from('user_shops').insert(payload);
       if (error) throw error;
       setOpenAddEmp(false);
       setEmpName(""); setEmpEmail(""); setEmpPassword(""); setEmpPhone(""); setEmpRole('staff');
@@ -825,7 +825,7 @@ const Admin = () => {
     if (!editEmp) return;
     try {
       setSavingEditEmp(true);
-      const { error } = await supabase.from('employees').update({
+      const { error } = await supabase.from('user_shops').update({
         name: editEmp.name,
         role: editEmp.role,
         phone: editEmp.phone ?? null,
@@ -848,7 +848,7 @@ const Admin = () => {
     try {
       const ok = window.confirm('Xóa nhân viên này?');
       if (!ok) return;
-      const { error } = await supabase.from('employees').delete().eq('id', id);
+      const { error } = await supabase.from('user_shops').delete().eq('id', id);
       if (error) throw error;
       await fetchEmployees();
       toast({ title: 'Đã xóa nhân viên' });

@@ -116,10 +116,11 @@ export const useOrders = () => {
 
       return orderData;
     } catch (err) {
-      console.error('Error creating order:', err);
+      const errMsg = err instanceof Error ? err.message : JSON.stringify(err);
+      console.error('Error creating order:', errMsg);
       toast({
         title: "Lỗi tạo đơn hàng",
-        description: "Không thể tạo đơn hàng. Vui lòng thử lại.",
+        description: errMsg || "Không thể tạo đơn hàng. Vui lòng thử lại.",
         variant: "destructive"
       });
       throw err;
@@ -153,6 +154,30 @@ export const useOrders = () => {
         description: "Không thể cập nhật trạng thái đơn hàng",
         variant: "destructive"
       });
+      throw err;
+    }
+  };
+
+  const moveOpenOrders = async (fromTableId: string, toTableId: string) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ table_id: toTableId, updated_at: new Date().toISOString() })
+        .eq('table_id', fromTableId)
+        .in('status', ['pending', 'preparing', 'ready', 'served']);
+      if (error) throw error;
+
+      // Update local state
+      setOrders(prev => prev.map(o => (
+        o.table_id === fromTableId && o.status !== 'paid' && o.status !== 'cancelled'
+          ? { ...o, table_id: toTableId, updated_at: new Date().toISOString() }
+          : o
+      )));
+
+      toast({ title: 'Đã chuyển đơn sang bàn mới' });
+    } catch (err) {
+      console.error('Error moving orders:', err);
+      toast({ title: 'Lỗi chuyển đơn', variant: 'destructive' });
       throw err;
     }
   };
@@ -205,6 +230,7 @@ export const useOrders = () => {
     createOrder,
     updateOrderStatus,
     cancelOrder,
+    moveOpenOrders,
     refetch: fetchOrders
   };
 };

@@ -6,12 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowRightLeft, Merge, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface Table {
+interface DBTable {
   id: string;
-  number: number;
+  table_number: number;
   seats: number;
-  status: "available" | "occupied" | "reserved";
-  notes?: string;
+  status: "available" | "occupied" | "reserved" | "cleaning";
+  notes?: string | null;
 }
 
 interface CartItemType {
@@ -26,44 +26,35 @@ interface CartItemType {
 }
 
 interface TableManagerProps {
-  selectedTable: Table | null;
+  selectedTable: DBTable | null;
+  tables: DBTable[];
   tableCartItems: {[tableId: string]: CartItemType[]};
   setTableCartItems: React.Dispatch<React.SetStateAction<{[tableId: string]: CartItemType[]}>>;
   confirmedOrders: {[tableId: string]: number};
   setConfirmedOrders: React.Dispatch<React.SetStateAction<{[tableId: string]: number}>>;
   formatPrice: (price: number) => string;
   tableNotes: {[tableId: string]: string};
-  onTableSwitch?: (newTable: Table) => void;
+  onTableSwitch?: (newTable: DBTable) => void;
+  updateTableStatus?: (tableId: string, status: DBTable['status']) => Promise<void>;
+  moveOpenOrders?: (fromId: string, toId: string) => Promise<void>;
 }
 
-const tables: Table[] = [
-  { id: "t1", number: 1, seats: 2, status: "available" },
-  { id: "t2", number: 2, seats: 4, status: "available" },
-  { id: "t3", number: 3, seats: 2, status: "occupied", notes: "Khách VIP - Đang dùng bữa" },
-  { id: "t4", number: 4, seats: 6, status: "available" },
-  { id: "t5", number: 5, seats: 4, status: "reserved", notes: "Đặt bàn 19:00 - Gia đình Nguyễn" },
-  { id: "t6", number: 6, seats: 8, status: "available" },
-  { id: "t7", number: 7, seats: 2, status: "available" },
-  { id: "t8", number: 8, seats: 4, status: "available" },
-  { id: "t9", number: 9, seats: 6, status: "available" },
-  { id: "t10", number: 10, seats: 2, status: "occupied" },
-  { id: "t11", number: 11, seats: 4, status: "available" },
-  { id: "t12", number: 12, seats: 8, status: "available" },
-];
-
-export function TableManager({ 
-  selectedTable, 
-  tableCartItems, 
-  setTableCartItems, 
-  confirmedOrders, 
-  setConfirmedOrders, 
+export function TableManager({
+  selectedTable,
+  tables,
+  tableCartItems,
+  setTableCartItems,
+  confirmedOrders,
+  setConfirmedOrders,
   formatPrice,
   tableNotes,
-  onTableSwitch
+  onTableSwitch,
+  updateTableStatus,
+  moveOpenOrders
 }: TableManagerProps) {
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
-  const [selectedTargetTable, setSelectedTargetTable] = useState<Table | null>(null);
+  const [selectedTargetTable, setSelectedTargetTable] = useState<DBTable | null>(null);
   const { toast } = useToast();
 
   const getTableStatusColor = (status: string) => {
@@ -92,9 +83,9 @@ export function TableManager({
     }
   };
 
-  const handleSwitchTable = () => {
+  const handleSwitchTable = async () => {
     if (!selectedTable || !selectedTargetTable) return;
-    
+
     const currentTableItems = tableCartItems[selectedTable.id] || [];
     if (currentTableItems.length === 0) {
       toast({
@@ -108,11 +99,8 @@ export function TableManager({
     // Move items from current table to target table
     setTableCartItems(prev => {
       const newState = { ...prev };
-      
-      // Add current table items to target table
       const targetTableItems = newState[selectedTargetTable.id] || [];
       const mergedItems = [...targetTableItems];
-      
       currentTableItems.forEach(currentItem => {
         const existingIndex = mergedItems.findIndex(item => item.id === currentItem.id);
         if (existingIndex >= 0) {
@@ -121,10 +109,8 @@ export function TableManager({
           mergedItems.push(currentItem);
         }
       });
-      
       newState[selectedTargetTable.id] = mergedItems;
-      delete newState[selectedTable.id]; // Remove from current table
-      
+      delete newState[selectedTable.id];
       return newState;
     });
 
@@ -134,31 +120,34 @@ export function TableManager({
         const newState = { ...prev };
         const currentOrder = newState[selectedTable.id] || 0;
         const targetOrder = newState[selectedTargetTable.id] || 0;
-        
         newState[selectedTargetTable.id] = currentOrder + targetOrder;
         delete newState[selectedTable.id];
-        
         return newState;
       });
     }
 
+    try {
+      if (moveOpenOrders) await moveOpenOrders(selectedTable.id, selectedTargetTable.id);
+      if (updateTableStatus) {
+        await updateTableStatus(selectedTable.id, 'available');
+        await updateTableStatus(selectedTargetTable.id, 'occupied');
+      }
+    } catch (e) {
+      console.error('Error syncing switch table:', e);
+    }
+
     toast({
       title: "Đã chuyển bàn thành công!",
-      description: `Chuyển từ bàn ${selectedTable.number} sang bàn ${selectedTargetTable.number}`,
+      description: `Chuyển từ bàn ${selectedTable.table_number} sang bàn ${selectedTargetTable.table_number}`,
     });
-    
-    // Switch to the new table
-    if (onTableSwitch) {
-      onTableSwitch(selectedTargetTable);
-    }
-    
+    if (onTableSwitch) onTableSwitch(selectedTargetTable);
     setShowSwitchDialog(false);
     setSelectedTargetTable(null);
   };
 
-  const handleMergeTable = () => {
+  const handleMergeTable = async () => {
     if (!selectedTable || !selectedTargetTable) return;
-    
+
     const currentTableItems = tableCartItems[selectedTable.id] || [];
     if (currentTableItems.length === 0) {
       toast({
@@ -174,7 +163,6 @@ export function TableManager({
       const newState = { ...prev };
       const targetTableItems = newState[selectedTargetTable.id] || [];
       const mergedItems = [...targetTableItems];
-      
       currentTableItems.forEach(currentItem => {
         const existingIndex = mergedItems.findIndex(item => item.id === currentItem.id);
         if (existingIndex >= 0) {
@@ -183,10 +171,8 @@ export function TableManager({
           mergedItems.push(currentItem);
         }
       });
-      
       newState[selectedTargetTable.id] = mergedItems;
-      delete newState[selectedTable.id]; // Clear source table after merge
-      
+      delete newState[selectedTable.id];
       return newState;
     });
 
@@ -196,19 +182,26 @@ export function TableManager({
         const newState = { ...prev };
         const currentOrder = newState[selectedTable.id] || 0;
         const targetOrder = newState[selectedTargetTable.id] || 0;
-        
         newState[selectedTargetTable.id] = currentOrder + targetOrder;
-        delete newState[selectedTable.id]; // Clear source table order
-        
+        delete newState[selectedTable.id];
         return newState;
       });
     }
 
+    try {
+      if (moveOpenOrders) await moveOpenOrders(selectedTable.id, selectedTargetTable.id);
+      if (updateTableStatus) {
+        await updateTableStatus(selectedTable.id, 'available');
+        await updateTableStatus(selectedTargetTable.id, 'occupied');
+      }
+    } catch (e) {
+      console.error('Error syncing merge table:', e);
+    }
+
     toast({
       title: "Đã gộp bàn thành công!",
-      description: `Gộp bàn ${selectedTable.number} vào bàn ${selectedTargetTable.number}`,
+      description: `Gộp bàn ${selectedTable.table_number} vào bàn ${selectedTargetTable.table_number}`,
     });
-    
     setShowMergeDialog(false);
     setSelectedTargetTable(null);
   };
@@ -250,7 +243,7 @@ export function TableManager({
       <Dialog open={showSwitchDialog} onOpenChange={setShowSwitchDialog}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Chuyển bàn {selectedTable?.number}</DialogTitle>
+            <DialogTitle>Chuyển bàn {selectedTable?.table_number}</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
@@ -271,11 +264,11 @@ export function TableManager({
                 >
                   <CardContent className="p-3 text-center">
                     <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/80 mx-auto mb-2">
-                      <span className="font-bold">{table.number}</span>
+                      <span className="font-bold">{table.table_number}</span>
                     </div>
                     
                     <div className="space-y-1">
-                      <h4 className="font-semibold text-sm">Bàn {table.number}</h4>
+                      <h4 className="font-semibold text-sm">Bàn {table.table_number}</h4>
                       <div className="flex items-center justify-center space-x-1 text-xs">
                         <Users className="w-3 h-3" />
                         <span>{table.seats}</span>
@@ -319,7 +312,7 @@ export function TableManager({
       <Dialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Gộp bàn {selectedTable?.number}</DialogTitle>
+            <DialogTitle>Gộp bàn {selectedTable?.table_number}</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
@@ -340,11 +333,11 @@ export function TableManager({
                 >
                   <CardContent className="p-3 text-center">
                     <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/80 mx-auto mb-2">
-                      <span className="font-bold">{table.number}</span>
+                      <span className="font-bold">{table.table_number}</span>
                     </div>
                     
                     <div className="space-y-1">
-                      <h4 className="font-semibold text-sm">Bàn {table.number}</h4>
+                      <h4 className="font-semibold text-sm">Bàn {table.table_number}</h4>
                       <div className="flex items-center justify-center space-x-1 text-xs">
                         <Users className="w-3 h-3" />
                         <span>{table.seats}</span>

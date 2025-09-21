@@ -11,20 +11,30 @@ export interface Table {
   updated_at: string;
 }
 
-export const useTables = () => {
+export const useTables = (shopId?: string | null) => {
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTables = async () => {
     try {
-      const { data, error } = await supabase
-        .from('tables')
-        .select('*')
-        .order('table_number');
-
+      let query = supabase.from('tables').select('*').order('table_number');
+      let result;
+      if (shopId) {
+        try {
+          // Attempt to scope by shop_id if schema supports it
+          result = await query.eq('shop_id', shopId);
+        } catch (e) {
+          // If filtering fails due to missing column, fallback
+          console.warn('tables.shop_id filter failed, falling back to all tables');
+          result = await supabase.from('tables').select('*').order('table_number');
+        }
+      } else {
+        result = await query;
+      }
+      const { data, error } = result as any;
       if (error) throw error;
-      setTables(data as Table[] || []);
+      setTables((data as Table[]) || []);
     } catch (err) {
       console.error('Error fetching tables:', err);
       setError('Không thể tải danh sách bàn');
@@ -86,7 +96,7 @@ export const useTables = () => {
     };
 
     loadTables();
-  }, []);
+  }, [shopId]);
 
   return {
     tables,

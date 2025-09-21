@@ -15,6 +15,7 @@ import { TableManager } from "@/components/TableManager";
 import { useProducts } from "@/hooks/useProducts";
 import { useTables } from "@/hooks/useTables";
 import { useOrders } from "@/hooks/useOrders";
+import { useCurrentShop } from "@/hooks/useCurrentShop";
 import cappuccinoImg from "@/assets/cappuccino.jpg";
 import bubbleTeaImg from "@/assets/bubble-tea.jpg";
 import icedTeaImg from "@/assets/iced-tea.jpg";
@@ -26,6 +27,7 @@ import { Link } from "react-router-dom";
 
 interface CartItemType {
   id: string;
+  productId: string;
   name: string;
   price: number;
   quantity: number;
@@ -50,17 +52,50 @@ const Index = () => {
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [activeCategory, setActiveCategory] = useState("Tất cả");
   const [searchTerm, setSearchTerm] = useState("");
-  const [tableCartItems, setTableCartItems] = useState<{[tableId: string]: CartItemType[]}>({});
+  const [tableCartItems, setTableCartItems] = useState<{[tableId: string]: CartItemType[]}>(() => {
+    try {
+      const raw = localStorage.getItem("tableCartItems");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [vatPercent, setVatPercent] = useState(10);
-  const [confirmedOrders, setConfirmedOrders] = useState<{[tableId: string]: number}>({});
+  const [confirmedOrders, setConfirmedOrders] = useState<{[tableId: string]: number}>(() => {
+    try {
+      const raw = localStorage.getItem("confirmedOrders");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
   const { toast } = useToast();
   
   // Use hooks to fetch data from Supabase
   const { products, categories: dbCategories, loading: productsLoading } = useProducts();
-  const { tables, updateTableStatus, updateTableNotes } = useTables();
-  const { createOrder } = useOrders();
+  const { shopName, shopId } = useCurrentShop();
+  const { tables, updateTableStatus, updateTableNotes } = useTables(shopId);
+  const { createOrder, orders, updateOrderStatus, moveOpenOrders } = useOrders();
+
+  // Totals from backend (unpaid orders) merged with local confirmed totals
+  const backendOpenTotals = React.useMemo(() => {
+    const map: { [tableId: string]: number } = {};
+    orders
+      .filter(o => o.status !== 'paid' && o.status !== 'cancelled')
+      .forEach(o => {
+        if (o.table_id) {
+          map[o.table_id] = (map[o.table_id] || 0) + o.total_amount;
+        }
+      });
+    return map;
+  }, [orders]);
+
+  const mergedTotals: { [tableId: string]: number } = React.useMemo(() => ({
+    ...backendOpenTotals,
+    ...confirmedOrders,
+  }), [backendOpenTotals, confirmedOrders]);
 
   // Get cart items for current table
   const cartItems = selectedTable ? (tableCartItems[selectedTable.id] || []) : [];
@@ -128,7 +163,7 @@ const Index = () => {
       .sort()
       .join(',') : '';
     
-    const cartItemId = `${product.id}-${size?.name || 'default'}-${toppingsStr}`;
+    const cartItemId = `${product.id}|${size?.name || 'default'}|${toppingsStr}`;
     const basePrice = size?.price || Number(product.price);
     
     // Calculate toppings price
@@ -162,6 +197,7 @@ const Index = () => {
           )
         : [...tableItems, {
             id: cartItemId,
+            productId: product.id,
             name: product.name,
             price: totalPrice,
             quantity: 1,
@@ -231,7 +267,7 @@ const Index = () => {
   const handleConfirmOrder = async () => {
     if (cartItems.length === 0) {
       toast({
-        title: "Giỏ hàng trống",
+        title: "Giỏ h��ng trống",
         description: "Vui lòng thêm sản phẩm vào giỏ hàng trước khi xác nhận",
         variant: "destructive"
       });
@@ -244,7 +280,7 @@ const Index = () => {
         
         // Prepare order items for database
         const orderItems = cartItems.map(item => ({
-          product_id: item.id.split('-')[0], // Extract original product ID
+          product_id: item.productId,
           quantity: item.quantity,
           unit_price: item.price / item.quantity,
           total_price: item.price * item.quantity,
@@ -267,40 +303,54 @@ const Index = () => {
           description: `Bàn ${selectedTable.table_number} - Tổng tiền: ${formatPrice(orderTotal)} - Đã gửi đến bếp`,
         });
       } catch (error) {
-        console.error('Error confirming order:', error);
+        const errMsg = error instanceof Error ? error.message : JSON.stringify(error);
+        console.error('Error confirming order:', errMsg);
       }
     }
   };
 
-  const handleDeleteOrder = () => {
-    if (!selectedTable || cartItems.length === 0) {
+  const handleDeleteOrder = async () => {
+    if (!selectedTable) {
       toast({
-        title: "Giỏ hàng trống",
-        description: "Không có đơn hàng để xóa",
+        title: "Chưa chọn bàn",
+        description: "Vui lòng chọn bàn trước khi xóa",
         variant: "destructive"
       });
       return;
     }
 
+    // Clear local cart for this table
     setTableCartItems(prev => ({
       ...prev,
       [selectedTable.id]: []
     }));
-    
-    // Also remove confirmed order status for this table
+
+    // Remove local confirmed total
     setConfirmedOrders(prev => {
       const updated = { ...prev };
       delete updated[selectedTable.id];
       return updated;
     });
-    
+
+    try {
+      // Cancel any open backend orders for this table
+      const openOrderIds = orders
+        .filter(o => o.table_id === selectedTable.id && o.status !== 'paid' && o.status !== 'cancelled')
+        .map(o => o.id);
+      await Promise.all(openOrderIds.map(id => updateOrderStatus(id, 'cancelled')));
+      // Free the table
+      await updateTableStatus(selectedTable.id, 'available');
+    } catch (e) {
+      console.error('Error cancelling orders/resetting table:', e);
+    }
+
     toast({
       title: "Đã xóa đơn hàng",
-      description: "Giỏ hàng đã được làm trống",
+      description: "Bàn đã được đặt về trạng thái Trống",
     });
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cartItems.length === 0) {
       toast({
         title: "Giỏ hàng trống",
@@ -314,21 +364,34 @@ const Index = () => {
       title: "Thanh toán thành công!",
       description: `Bàn ${selectedTable?.table_number} - Tổng tiền: ${formatPrice(calculateTotal())}`,
     });
-    
+
+    try {
+      if (selectedTable) {
+        // Mark all open orders for this table as paid
+        const openOrderIds = orders
+          .filter(o => o.table_id === selectedTable.id && o.status !== 'paid' && o.status !== 'cancelled')
+          .map(o => o.id);
+        await Promise.all(openOrderIds.map(id => updateOrderStatus(id, 'paid')));
+        // Then set table back to available
+        await updateTableStatus(selectedTable.id, 'available');
+      }
+    } catch (e) {
+      console.error('Error resetting table status:', e);
+    }
+
     setTableCartItems(prev => {
       if (!selectedTable) return prev;
       const updated = { ...prev };
       delete updated[selectedTable.id];
       return updated;
     });
-    
+
     setConfirmedOrders(prev => {
       const updated = { ...prev };
-      delete updated[selectedTable.id];
+      if (selectedTable) delete updated[selectedTable.id];
       return updated;
     });
-    
-    // Reset về tab chọn bàn sau khi thanh toán
+
     setActiveTab("tables");
     setSelectedTable(null);
   };
@@ -344,6 +407,18 @@ const Index = () => {
       console.error('Error updating table note:', error);
     }
   };
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("tableCartItems", JSON.stringify(tableCartItems));
+    } catch {}
+  }, [tableCartItems]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("confirmedOrders", JSON.stringify(confirmedOrders));
+    } catch {}
+  }, [confirmedOrders]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -375,6 +450,7 @@ const Index = () => {
                 <span>Bàn {selectedTable.table_number}</span>
               </div>
             )}
+            <span>Cửa hàng: {shopName}</span>
             <span>Hệ thống bán hàng</span>
           </div>
         </div>
@@ -403,7 +479,7 @@ const Index = () => {
               selectedTable={selectedTable}
               onTableSelect={handleTableSelect}
               onConfirmTable={handleConfirmTable}
-              confirmedOrders={confirmedOrders}
+              confirmedOrders={mergedTotals}
               formatPrice={formatPrice}
               onUpdateTableNote={handleUpdateTableNote}
             />
@@ -538,6 +614,7 @@ const Index = () => {
 
                           <TableManager
                             selectedTable={selectedTable}
+                            tables={tables}
                             tableCartItems={tableCartItems}
                             setTableCartItems={setTableCartItems}
                             confirmedOrders={confirmedOrders}
@@ -545,6 +622,8 @@ const Index = () => {
                             formatPrice={formatPrice}
                             tableNotes={{}}
                             onTableSwitch={setSelectedTable}
+                            updateTableStatus={updateTableStatus}
+                            moveOpenOrders={moveOpenOrders}
                           />
 
                           <Button

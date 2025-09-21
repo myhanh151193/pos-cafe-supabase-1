@@ -30,6 +30,7 @@ const menuItems = [
   { title: "Sản phẩm", url: "/admin?tab=products", icon: Package, tab: "products" },
   { title: "Tồn kho", url: "/admin?tab=inventory", icon: Warehouse, tab: "inventory" },
   { title: "Bàn", url: "/admin?tab=tables", icon: Users, tab: "tables" },
+  { title: "Nhân viên", url: "/admin?tab=employees", icon: Users, tab: "employees" },
 ];
 
 const externalLinks = [
